@@ -36,3 +36,9 @@ A feature-module system so new YouTube features can be added without touching ex
 Content-script load order in `manifest.json` matters: `features.js` → `core.js` → `features/*.js` → `main.js`. A new feature needs three edits: an entry in `features.js`, a new file in `src/features/`, and that file listed in `manifest.json` before `src/main.js`.
 
 Ad-skip details: an ad is detected via the `ad-showing` class on `#movie_player`. `skipAd` clicks the skip button, then after 300 ms, if the ad is still showing with a skip button, it seeks the ad video to its end, because YouTube may ignore synthetic (untrusted) clicks. Skip-button selectors live in `SKIP_SELECTORS` in `core.js`, and those selectors are the first thing to update when YouTube changes its markup.
+
+## Commits
+
+Whenever you are about to run `git commit` in this repo (the user says commit, commit đi, tạo commit, lưu thay đổi, or a task ends with committing), load the `commit` skill (`.claude/skills/commit/SKILL.md`) yourself and follow it. Do not wait for the user to type `/commit`. It defines the house style: an all-lowercase `brief title: detail` subject, `- ` bullet lines, and the Co-Authored-By trailer.
+
+Commit proactively: when a change is complete (code edited, syntax-checked, synced to Windows), commit it without waiting to be asked. Never push unless asked.
