@@ -1,0 +1,25 @@
+// Bật/tắt từng tính năng theo cài đặt trong popup.
+(() => {
+  "use strict";
+
+  const running = {};
+  const defaults = {};
+  for (const f of YTT_FEATURES) defaults[f.id] = f.defaultEnabled;
+
+  function apply(id, on) {
+    const mod = YTT.modules[id];
+    if (!mod || !!running[id] === on) return;
+    on ? mod.start() : mod.stop();
+    running[id] = on;
+  }
+
+  chrome.storage.sync.get({ features: defaults }, ({ features }) => {
+    for (const id of Object.keys(defaults)) apply(id, features[id] ?? defaults[id]);
+  });
+
+  chrome.storage.onChanged.addListener((changes) => {
+    if (!changes.features) return;
+    const features = changes.features.newValue || {};
+    for (const id of Object.keys(defaults)) apply(id, features[id] ?? defaults[id]);
+  });
+})();

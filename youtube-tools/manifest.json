@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Tools",
+  "version": "1.2.0",
+  "description": "Bộ công cụ tiện ích khi xem YouTube.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "YouTube Tools",
+    "default_popup": "popup/popup.html",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*", "https://music.youtube.com/*"],
+      "js": [
+        "src/features.js",
+        "src/core.js",
+        "src/features/skip-ad-key.js",
+        "src/features/auto-skip-ad.js",
+        "src/main.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
