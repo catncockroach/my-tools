@@ -7,7 +7,6 @@ YTT.register("skipAdKey", (() => {
 
   function onKeyDown(e) {
     if (e.repeat || IGNORED_KEYS.has(e.key) || YTT.isTyping(e.target)) return;
-    if (!YTT.isAdShowing()) return;
     const button = YTT.findSkipButton();
     if (!button) return; // Chưa có nút Skip -> để phím hoạt động bình thường.
 
