@@ -3,7 +3,7 @@ YTT.register("autoSkipAd", (() => {
   "use strict";
 
   const CHECK_INTERVAL_MS = 300;
-  const RETRY_AFTER_MS = 1500;  // Chờ kết quả lần bấm trước (skipAd mất ~1.4s) rồi mới bấm lại.
+  const RETRY_AFTER_MS = 1500;  // Sau khi một lượt skipAd kết thúc, chờ thêm rồi mới thử lượt mới.
   const MAX_TRIES_PER_BUTTON = 5; // Tránh bấm mãi một nút không phản hồi.
   const REPORT_AFTER_MS = 8000; // Quảng cáo kéo dài mà chưa thấy nút Skip -> in chẩn đoán.
 
@@ -26,6 +26,7 @@ YTT.register("autoSkipAd", (() => {
     }
 
     if (button) {
+      if (YTT.isSkipping()) { lastSkip = Date.now(); return; } // Lượt skip trước vẫn đang bấm lại/tua.
       if (Date.now() - lastSkip < RETRY_AFTER_MS) return;
       const n = tries.get(button) || 0;
       if (n >= MAX_TRIES_PER_BUTTON) return;

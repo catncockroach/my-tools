@@ -108,32 +108,61 @@ var YTT = (() => {
     el.click();
   }
 
-  // Bấm nút Skip. Nếu YouTube bỏ qua click giả lập, tua quảng cáo (đã cho phép skip) tới cuối.
+  const CLICK_RETRY_MS = 400;  // Chờ giữa các lần bấm để xem nút Skip đã biến mất chưa.
+  const MAX_CLICKS = 3;        // Lần bấm đầu đôi khi chỉ làm dừng quảng cáo, cần bấm thêm.
+  let skipping = false;        // Đang trong một lượt skip (tránh auto-skip và phím bấm chồng nhau).
+
+  function isSkipping() { return skipping; }
+
+  // Bấm nút Skip; nếu nút vẫn còn thì bấm lại (tối đa MAX_CLICKS lần).
+  // Nếu YouTube vẫn bỏ qua click giả lập, tua quảng cáo (đã cho phép skip) tới cuối.
   // Thành công = nút Skip biến mất (không dựa vào class "ad-showing").
+  // Trả về false nếu đang có một lượt skip khác chạy.
   function skipAd(button) {
-    log("Bấm nút Skip:", labelOf(button).slice(0, 100), "| ad-showing:", isAdShowing());
-    simulateClick(button);
-    setTimeout(() => {
-      if (!findSkipButton()) { log("Đã skip xong (click có tác dụng)."); toast("⏭ Đã bỏ qua quảng cáo"); return; }
+    if (skipping) return false;
+    skipping = true;
+    let clicks = 0;
+
+    const done = (msg) => { log(msg); toast("⏭ Đã bỏ qua quảng cáo"); skipping = false; };
+
+    const clickOnce = (btn) => {
+      clicks++;
+      log(`Bấm nút Skip (lần ${clicks}):`, labelOf(btn).slice(0, 100), "| ad-showing:", isAdShowing());
+      simulateClick(btn);
+      setTimeout(afterClick, CLICK_RETRY_MS);
+    };
+
+    const afterClick = () => {
+      const btn = findSkipButton();
+      if (!btn) return done(`Đã skip xong (sau ${clicks} lần bấm).`);
+      if (clicks < MAX_CLICKS) return clickOnce(btn); // Nút vẫn còn -> bấm lại.
+      seekToEnd();
+    };
+
+    const seekToEnd = () => {
       const video = getVideo();
       const canSeek = video && isFinite(video.duration) && video.duration > 0 &&
         !video.ended && video.duration - video.currentTime > 0.5;
       if (!canSeek) {
-        log("Click không có tác dụng, và không còn video để tua (trang tĩnh?).",
+        log(`Bấm ${clicks} lần không có tác dụng, và không còn video để tua (trang tĩnh?).`,
           video ? { currentTime: video.currentTime, duration: video.duration, ended: video.ended, paused: video.paused } : "không thấy video");
+        skipping = false;
         return;
       }
-      log(`Click không có tác dụng, tua quảng cáo tới cuối (${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s).`);
+      log(`Bấm ${clicks} lần không có tác dụng, tua quảng cáo tới cuối (${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s).`);
       video.currentTime = video.duration;
       setTimeout(() => {
         if (findSkipButton()) {
           log("Vẫn còn nút Skip sau khi tua.");
+          skipping = false;
         } else {
-          log("Đã tua hết quảng cáo.");
-          toast("⏭ Đã bỏ qua quảng cáo");
+          done("Đã tua hết quảng cáo.");
         }
       }, 1000);
-    }, 400);
+    };
+
+    clickOnce(button);
+    return true;
   }
 
   function toast(text) {
@@ -155,5 +184,5 @@ var YTT = (() => {
     el._t = setTimeout(() => { el.style.opacity = "0"; }, 1200);
   }
 
-  return { modules, register, log, isVisible, getPlayer, getVideo, isAdShowing, isTyping, findSkipButton, describeAdButtons, skipAd, toast };
+  return { modules, register, log, isVisible, getPlayer, getVideo, isAdShowing, isTyping, findSkipButton, describeAdButtons, skipAd, isSkipping, toast };
 })();
