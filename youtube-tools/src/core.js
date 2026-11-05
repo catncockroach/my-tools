@@ -66,29 +66,58 @@ var YTT = (() => {
       .filter((x) => typeof x === "string").join(" ").replace(/\s+/g, " ").trim();
   }
 
-  // Nút Skip đang hiện. Không phụ thuộc isAdShowing(), vì ở trang tĩnh cuối quảng cáo
-  // YouTube có thể đã gỡ class "ad-showing" trong khi nút Skip vẫn còn.
-  function findSkipButton() {
+  // Nút có thực sự nằm trên cùng (không bị lớp khác che) tại điểm giữa của nó không.
+  function isOnTop(el) {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+  }
+
+  // Mọi nút Skip đang hiện, nút nằm trên cùng xếp trước.
+  // Không phụ thuộc isAdShowing(), vì ở trang ảnh tĩnh cuối quảng cáo YouTube có thể đã gỡ
+  // class "ad-showing" trong khi nút Skip vẫn còn. Có thể có nhiều nút cùng lúc (nút cũ của
+  // quảng cáo trước còn sót lại, bị che), nên không chỉ lấy nút đầu tiên.
+  function findSkipButtons() {
+    const found = new Set();
     for (const el of document.querySelectorAll(SKIP_SELECTORS)) {
-      if (isVisible(el)) return el;
+      if (isVisible(el)) found.add(el);
     }
-    if (!isAdShowing()) return null; // Dò rộng (nặng hơn) chỉ khi chắc đang có quảng cáo.
-    for (const el of document.querySelectorAll(AD_AREA_BUTTONS)) {
-      if (/skip|bỏ qua|bo qua/i.test(labelOf(el)) && isVisible(el)) return el;
+    // Dò rộng theo nhãn, chỉ trong player cho nhẹ.
+    const player = getPlayer();
+    if (player) {
+      for (const el of player.querySelectorAll(AD_AREA_BUTTONS)) {
+        if (/skip|bỏ qua|bo qua/i.test(labelOf(el)) && isVisible(el)) found.add(el);
+      }
     }
-    return null;
+    // Giữ phần tử trong cùng (click sẽ nổi bọt lên phần tử cha), bỏ phần tử bọc ngoài.
+    const list = [...found].filter((el) => ![...found].some((o) => o !== el && el.contains(o)));
+    return list.sort((a, b) => isOnTop(b) - isOnTop(a));
+  }
+
+  function findSkipButton() {
+    return findSkipButtons()[0] || null;
   }
 
   // In ra các nút đang có trong vùng quảng cáo, để biết cần sửa selector thế nào.
   function describeAdButtons() {
     const player = getPlayer();
-    return {
-      playerClasses: player ? player.className : "(không thấy #movie_player)",
-      buttons: [...document.querySelectorAll(AD_AREA_BUTTONS)].map((el) => ({
+    const video = getVideo();
+    const describe = (el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return {
         tag: el.tagName.toLowerCase(),
         label: labelOf(el).slice(0, 150),
-        visible: isVisible(el)
-      }))
+        visible: isVisible(el),
+        onTop: isVisible(el) && isOnTop(el),
+        coveredBy: hit && !isOnTop(el) ? labelOf(hit).slice(0, 100) : undefined
+      };
+    };
+    return {
+      playerClasses: player ? player.className : "(không thấy #movie_player)",
+      video: video ? { currentTime: video.currentTime, duration: video.duration, ended: video.ended, paused: video.paused } : null,
+      skipButtons: [...document.querySelectorAll(SKIP_SELECTORS)].map(describe),
+      adButtons: [...document.querySelectorAll(AD_AREA_BUTTONS)].map(describe)
     };
   }
 
@@ -125,17 +154,20 @@ var YTT = (() => {
 
     const done = (msg) => { log(msg); toast("⏭ Đã bỏ qua quảng cáo"); skipping = false; };
 
-    const clickOnce = (btn) => {
+    // Bấm mọi nút Skip đang hiện (nút trên cùng trước), vì không chắc nút nào là nút "thật".
+    const clickOnce = (buttons) => {
       clicks++;
-      log(`Bấm nút Skip (lần ${clicks}):`, labelOf(btn).slice(0, 100), "| ad-showing:", isAdShowing());
-      simulateClick(btn);
+      log(`Bấm nút Skip (lần ${clicks}, ${buttons.length} nút):`,
+        buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")),
+        "| ad-showing:", isAdShowing());
+      for (const b of buttons) simulateClick(b);
       setTimeout(afterClick, CLICK_RETRY_MS);
     };
 
     const afterClick = () => {
-      const btn = findSkipButton();
-      if (!btn) return done(`Đã skip xong (sau ${clicks} lần bấm).`);
-      if (clicks < MAX_CLICKS) return clickOnce(btn); // Nút vẫn còn -> bấm lại.
+      const buttons = findSkipButtons();
+      if (!buttons.length) return done(`Đã skip xong (sau ${clicks} lần bấm).`);
+      if (clicks < MAX_CLICKS) return clickOnce(buttons); // Nút vẫn còn -> bấm lại.
       seekToEnd();
     };
 
@@ -144,8 +176,8 @@ var YTT = (() => {
       const canSeek = video && isFinite(video.duration) && video.duration > 0 &&
         !video.ended && video.duration - video.currentTime > 0.5;
       if (!canSeek) {
-        log(`Bấm ${clicks} lần không có tác dụng, và không còn video để tua (trang tĩnh?).`,
-          video ? { currentTime: video.currentTime, duration: video.duration, ended: video.ended, paused: video.paused } : "không thấy video");
+        log(`Bấm ${clicks} lần không có tác dụng, và không còn video để tua (trang tĩnh?). Chẩn đoán:`,
+          describeAdButtons());
         skipping = false;
         return;
       }
@@ -153,7 +185,7 @@ var YTT = (() => {
       video.currentTime = video.duration;
       setTimeout(() => {
         if (findSkipButton()) {
-          log("Vẫn còn nút Skip sau khi tua.");
+          log("Vẫn còn nút Skip sau khi tua. Chẩn đoán:", describeAdButtons());
           skipping = false;
         } else {
           done("Đã tua hết quảng cáo.");
@@ -161,7 +193,8 @@ var YTT = (() => {
       }, 1000);
     };
 
-    clickOnce(button);
+    const buttons = findSkipButtons();
+    clickOnce(buttons.length ? buttons : [button]);
     return true;
   }
 
@@ -184,5 +217,5 @@ var YTT = (() => {
     el._t = setTimeout(() => { el.style.opacity = "0"; }, 1200);
   }
 
-  return { modules, register, log, isVisible, getPlayer, getVideo, isAdShowing, isTyping, findSkipButton, describeAdButtons, skipAd, isSkipping, toast };
+  return { modules, register, log, isVisible, getPlayer, getVideo, isAdShowing, isTyping, findSkipButton, findSkipButtons, describeAdButtons, skipAd, isSkipping, toast };
 })();
