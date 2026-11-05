@@ -4,6 +4,7 @@ Tiện ích khi xem YouTube. Bấm vào icon extension để bật/tắt từng 
 
 ## Chức năng
 
+- **Chặn quảng cáo video từ gốc**: xóa danh sách quảng cáo (`adPlacements`, `adSlots`, `playerAds`) khỏi dữ liệu YouTube gửi về trước khi player đọc, giống cách uBlock Origin làm. Có hiệu lực từ video tải sau khi bật/tắt. Không chặn được quảng cáo YouTube ghép thẳng vào luồng video.
 - **Tự động skip quảng cáo**: nút "Bỏ qua" vừa xuất hiện là tự bấm luôn.
 - **Bấm phím bất kỳ để skip**: khi nút "Bỏ qua" đã hiện, bấm phím bất kỳ (trừ Ctrl/Shift/Alt) để skip.
 - **Tua nhanh quảng cáo x3**: đang có quảng cáo thì tắt tiếng và chạy x3 (cả quảng cáo không cho skip), hết quảng cáo thì trả lại tốc độ và âm thanh.
@@ -16,6 +17,7 @@ Skip chỉ dùng được với quảng cáo có nút "Bỏ qua"; quảng cáo k
 ```
 manifest.json
 src/features.js        Danh sách chức năng (tên, mô tả, bật mặc định) - dùng chung cho popup
+src/page/block-ads.js  Chạy trong trang (MAIN world, document_start): xóa quảng cáo khỏi dữ liệu player
 src/core.js            Hàm dùng chung: tìm video, kiểm tra quảng cáo, bấm Skip, thông báo
 src/features/*.js      Mỗi chức năng một file, đăng ký bằng YTT.register(id, { start, stop })
 src/main.js            Bật/tắt chức năng theo cài đặt

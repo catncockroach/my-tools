@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Tools",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "Bộ công cụ tiện ích khi xem YouTube.",
   "permissions": ["storage"],
   "action": {
@@ -13,6 +13,12 @@
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*", "https://music.youtube.com/*"],
+      "js": ["src/page/block-ads.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*", "https://music.youtube.com/*"],
       "js": [
         "src/features.js",
         "src/core.js",
@@ -20,6 +26,7 @@
         "src/features/auto-skip-ad.js",
         "src/features/speed-up-ad.js",
         "src/features/hide-feed-ads.js",
+        "src/features/block-ads.js",
         "src/main.js"
       ],
       "run_at": "document_idle"

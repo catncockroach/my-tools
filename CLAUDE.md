@@ -16,7 +16,7 @@ Development happens in WSL, but Chrome runs on Windows, so extensions must be co
 WIN_EXT_DIR=/mnt/c/some/path ./sync-to-windows.sh   # override destination
 
 # Syntax checks (the only "lint" available)
-for f in youtube-tools/src/*.js youtube-tools/src/features/*.js youtube-tools/popup/*.js; do node --check "$f"; done
+for f in youtube-tools/src/*.js youtube-tools/src/features/*.js youtube-tools/src/page/*.js youtube-tools/popup/*.js; do node --check "$f"; done
 python3 -m json.tool youtube-tools/manifest.json >/dev/null
 ```
 
@@ -34,6 +34,8 @@ A feature-module system so new YouTube features can be added without touching ex
 - `src/core.js` defines the global `YTT`: the module registry (`YTT.register(id, {start, stop})`) and shared helpers (`isAdShowing`, `findSkipButton`, `skipAd`, `getVideo`, `isTyping`, `toast`).
 - `src/features/*.js`: each file calls `YTT.register(<id>, { start(), stop() })`. The id must match an entry in `YTT_FEATURES`. Features must be fully reversible via `stop()`, because they are toggled live.
 - `src/main.js` reads `chrome.storage.sync` key `features` (an object `{id: bool}`, with defaults from `YTT_FEATURES`), starts/stops modules, and reacts to `storage.onChanged` so popup toggles apply without reloading the page.
+
+Ad blocking at the source: `src/page/block-ads.js` is a separate content script with `"world": "MAIN"` and `run_at: document_start`, so it runs before YouTube's scripts. It removes `adPlacements`/`adSlots`/`playerAds` from player data via a setter on `window.ytInitialPlayerResponse` and Proxies on `Response.prototype.json` and `JSON.parse`. MAIN-world code cannot use `chrome.*`, so the `blockAds` feature module (isolated world) only writes a flag to youtube.com `localStorage` (`ytt-block-ads`, `"0"` = off), which the page script reads on every call. `main.js` calls `stop()` on initially-disabled features so such flags get written, so every `stop()` must be safe to call before `start()`.
 
 Content-script load order in `manifest.json` matters: `features.js` → `core.js` → `features/*.js` → `main.js`. A new feature needs three edits: an entry in `features.js`, a new file in `src/features/`, and that file listed in `manifest.json` before `src/main.js`.
 

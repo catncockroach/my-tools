@@ -2,6 +2,12 @@
 // Thêm tính năng mới: thêm 1 dòng ở đây + 1 file trong src/features/ + khai báo file đó trong manifest.json.
 var YTT_FEATURES = [
   {
+    id: "blockAds",
+    name: "Chặn quảng cáo video từ gốc",
+    description: "Xóa danh sách quảng cáo khỏi dữ liệu YouTube gửi về trước khi player đọc, nên video không có quảng cáo. Có hiệu lực từ video tải sau khi bật/tắt.",
+    defaultEnabled: true
+  },
+  {
     id: "autoSkipAd",
     name: "Tự động skip quảng cáo",
     description: "Nút \"Bỏ qua\" vừa xuất hiện là tự bấm luôn, không cần thao tác.",

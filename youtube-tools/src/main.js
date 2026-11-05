@@ -8,7 +8,10 @@
 
   function apply(id, on) {
     const mod = YTT.modules[id];
-    if (!mod || !!running[id] === on) return;
+    // Lần đầu (running[id] chưa có) cũng gọi stop() cho tính năng đang tắt, để tính năng nào
+    // cần ghi trạng thái "tắt" (vd blockAds ghi cờ localStorage) đều được ghi. stop() phải an toàn
+    // khi gọi lúc chưa start.
+    if (!mod || running[id] === on) return;
     on ? mod.start() : mod.stop();
     running[id] = on;
   }
