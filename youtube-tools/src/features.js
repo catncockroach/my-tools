@@ -18,5 +18,11 @@ var YTT_FEATURES = [
     name: "Tua nhanh quảng cáo x16",
     description: "Đang có quảng cáo thì tắt tiếng và chạy nhanh x16, kể cả quảng cáo không cho skip. Hết quảng cáo tự trả lại tốc độ và âm thanh.",
     defaultEnabled: true
+  },
+  {
+    id: "hideFeedAds",
+    name: "Ẩn thẻ quảng cáo trong danh sách video",
+    description: "Ẩn thẻ quảng cáo (Sponsored) ở trang chủ, kết quả tìm kiếm, cột video đề xuất và banner đầu trang.",
+    defaultEnabled: true
   }
 ];

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Tools",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Bộ công cụ tiện ích khi xem YouTube.",
   "permissions": ["storage"],
   "action": {
@@ -19,6 +19,7 @@
         "src/features/skip-ad-key.js",
         "src/features/auto-skip-ad.js",
         "src/features/speed-up-ad.js",
+        "src/features/hide-feed-ads.js",
         "src/main.js"
       ],
       "run_at": "document_idle"
