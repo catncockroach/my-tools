@@ -6,8 +6,9 @@ Tiện ích khi xem YouTube. Bấm vào icon extension để bật/tắt từng 
 
 - **Tự động skip quảng cáo**: nút "Bỏ qua" vừa xuất hiện là tự bấm luôn.
 - **Bấm phím bất kỳ để skip**: khi nút "Bỏ qua" đã hiện, bấm phím bất kỳ (trừ Ctrl/Shift/Alt) để skip.
+- **Tua nhanh quảng cáo x16**: đang có quảng cáo thì tắt tiếng và chạy x16 (cả quảng cáo không cho skip), hết quảng cáo thì trả lại tốc độ và âm thanh.
 
-Chỉ skip được quảng cáo có nút "Bỏ qua".
+Skip chỉ dùng được với quảng cáo có nút "Bỏ qua"; quảng cáo không cho skip thì được tua nhanh. Đây không phải chặn quảng cáo: quảng cáo vẫn được tải và phát, chỉ là rất nhanh.
 
 ## Cấu trúc
 

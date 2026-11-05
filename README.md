@@ -4,7 +4,7 @@ Nơi chứa các Chrome extension dùng cá nhân. Mỗi extension là một th�
 
 | Extension | Mô tả |
 |---|---|
-| [youtube-tools](youtube-tools/) | Tiện ích khi xem YouTube: tự động skip quảng cáo, bấm phím bất kỳ để skip. |
+| [youtube-tools](youtube-tools/) | Tiện ích khi xem YouTube: tự động skip quảng cáo, bấm phím bất kỳ để skip, tua nhanh quảng cáo x16. |
 
 ## Cài vào Chrome
 

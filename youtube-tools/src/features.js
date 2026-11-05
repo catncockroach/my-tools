@@ -12,5 +12,11 @@ var YTT_FEATURES = [
     name: "Bấm phím bất kỳ để skip quảng cáo",
     description: "Khi quảng cáo có nút \"Bỏ qua\", bấm phím bất kỳ (trừ Ctrl/Shift/Alt) để skip.",
     defaultEnabled: true
+  },
+  {
+    id: "speedUpAd",
+    name: "Tua nhanh quảng cáo x16",
+    description: "Đang có quảng cáo thì tắt tiếng và chạy nhanh x16, kể cả quảng cáo không cho skip. Hết quảng cáo tự trả lại tốc độ và âm thanh.",
+    defaultEnabled: true
   }
 ];
