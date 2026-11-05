@@ -1,31 +1,26 @@
 // Tính năng: nút Skip vừa xuất hiện là tự bấm luôn.
-// Quảng cáo có thể nối tiếp nhau (quảng cáo 1 -> quảng cáo 2 -> trang ảnh tĩnh có nút Skip),
-// nên mỗi lần nút Skip biến mất thì coi như xong một quảng cáo và đếm lại từ đầu.
+// Quảng cáo có thể nối tiếp nhau (quảng cáo 1 -> quảng cáo 2 -> màn hình kết thúc có nút Skip).
+// YTT.skipAd tự bấm liên tục tới khi nút biến mất; ở đây chỉ cần phát hiện nút thật nhanh.
 YTT.register("autoSkipAd", (() => {
   "use strict";
 
-  const CHECK_INTERVAL_MS = 300;
-  const RETRY_AFTER_MS = 1500;  // Sau khi một lượt skipAd kết thúc, chờ thêm rồi mới thử lượt mới.
-  const MAX_ROUNDS = 6;         // Số lượt skipAd liên tiếp mà nút vẫn còn, quá thì tạm dừng để khỏi bấm mãi.
+  const CHECK_INTERVAL_MS = 100;
   const REPORT_AFTER_MS = 8000; // Quảng cáo kéo dài mà chưa thấy nút Skip -> in chẩn đoán.
 
   let timer = null;
-  let lastSkip = 0;
   let adStartedAt = 0;
+  let buttonSeenAt = 0;
   let reported = false;
-  let rounds = 0;       // Số lượt skipAd liên tiếp trong khi nút Skip vẫn còn.
-  let gaveUp = false;
+  let gaveUp = false; // skipAd đã bó tay với nút đang hiện -> chờ nút biến mất rồi mới thử lại.
 
   function check() {
     const button = YTT.findSkipButton();
 
     if (!button) {
-      // Nút đã biến mất -> lượt sau (quảng cáo kế tiếp, trang tĩnh) được thử lại từ đầu.
-      rounds = 0;
+      buttonSeenAt = 0;
       gaveUp = false;
-      if (!YTT.isAdShowing()) adStartedAt = 0;
+      if (!YTT.isAdShowing()) { adStartedAt = 0; return; }
     }
-    if (!button && !YTT.isAdShowing()) return;
 
     if (!adStartedAt) {
       adStartedAt = Date.now();
@@ -34,18 +29,12 @@ YTT.register("autoSkipAd", (() => {
     }
 
     if (button) {
-      if (YTT.isSkipping()) { lastSkip = Date.now(); return; } // Lượt trước vẫn đang bấm lại/tua.
-      if (Date.now() - lastSkip < RETRY_AFTER_MS) return;
-      if (rounds >= MAX_ROUNDS) {
-        if (!gaveUp) {
-          gaveUp = true;
-          YTT.log(`Đã thử ${MAX_ROUNDS} lượt mà nút Skip vẫn còn, tạm dừng. Chẩn đoán:`, YTT.describeAdButtons());
-        }
-        return;
+      if (!buttonSeenAt) {
+        buttonSeenAt = Date.now();
+        YTT.log(`Thấy nút Skip (quảng cáo đã chạy ${((buttonSeenAt - adStartedAt) / 1000).toFixed(1)}s).`);
       }
-      rounds++;
-      lastSkip = Date.now();
-      YTT.skipAd(button);
+      if (gaveUp || YTT.isSkipping()) return;
+      YTT.skipAd((ok) => { if (!ok) gaveUp = true; });
       return;
     }
 

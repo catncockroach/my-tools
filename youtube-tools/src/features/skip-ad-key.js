@@ -13,7 +13,7 @@ YTT.register("skipAdKey", (() => {
     // Chặn phím, để nó không làm thao tác khác (vd: Space tạm dừng, F fullscreen).
     e.preventDefault();
     e.stopImmediatePropagation();
-    YTT.skipAd(button);
+    YTT.skipAd();
   }
 
   return {

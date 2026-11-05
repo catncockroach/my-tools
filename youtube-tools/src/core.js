@@ -137,64 +137,67 @@ var YTT = (() => {
     el.click();
   }
 
-  const CLICK_RETRY_MS = 400;  // Chờ giữa các lần bấm để xem nút Skip đã biến mất chưa.
-  const MAX_CLICKS = 3;        // Lần bấm đầu đôi khi chỉ làm dừng quảng cáo, cần bấm thêm.
-  let skipping = false;        // Đang trong một lượt skip (tránh auto-skip và phím bấm chồng nhau).
+  const CLICK_EVERY_MS = 250;     // Nút Skip còn thì cứ 250 ms bấm lại, không nghỉ giữa chừng.
+  const SEEK_AFTER_CLICKS = 2;    // Bấm 2 lần chưa được mà quảng cáo còn đang chạy -> tua tới cuối luôn.
+  const GIVE_UP_AFTER_MS = 10000; // Bấm liên tục 10 giây không được thì dừng (tránh bấm mãi).
+  let skipping = false;           // Đang trong một lượt skip (tránh auto-skip và phím bấm chồng nhau).
 
   function isSkipping() { return skipping; }
 
-  // Bấm nút Skip; nếu nút vẫn còn thì bấm lại (tối đa MAX_CLICKS lần).
-  // Nếu YouTube vẫn bỏ qua click giả lập, tua quảng cáo (đã cho phép skip) tới cuối.
-  // Thành công = nút Skip biến mất (không dựa vào class "ad-showing").
+  // Video quảng cáo còn đang chạy và tua được (không phải màn hình kết thúc).
+  function seekableAd() {
+    const video = getVideo();
+    return video && isFinite(video.duration) && video.duration > 0 &&
+      !video.ended && video.duration - video.currentTime > 0.5 ? video : null;
+  }
+
+  // Bấm mọi nút Skip đang hiện (nút trên cùng trước), lặp lại mỗi CLICK_EVERY_MS cho tới khi
+  // nút biến mất. Lần bấm đầu đôi khi chỉ dừng quảng cáo / chuyển sang màn hình kết thúc,
+  // nên phải bấm tiếp. Nếu YouTube bỏ qua click giả lập khi quảng cáo còn chạy, tua tới cuối.
+  // Thành công = nút Skip biến mất. onEnd(ok) được gọi khi kết thúc.
   // Trả về false nếu đang có một lượt skip khác chạy.
-  function skipAd(button) {
+  function skipAd(onEnd) {
     if (skipping) return false;
     skipping = true;
+    const t0 = performance.now();
+    const ms = () => Math.round(performance.now() - t0);
     let clicks = 0;
+    let seeked = false;
 
-    const done = (msg) => { log(msg); toast("⏭ Đã bỏ qua quảng cáo"); skipping = false; };
-
-    // Bấm mọi nút Skip đang hiện (nút trên cùng trước), vì không chắc nút nào là nút "thật".
-    const clickOnce = (buttons) => {
-      clicks++;
-      log(`Bấm nút Skip (lần ${clicks}, ${buttons.length} nút):`,
-        buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")),
-        "| ad-showing:", isAdShowing());
-      for (const b of buttons) simulateClick(b);
-      setTimeout(afterClick, CLICK_RETRY_MS);
+    const finish = (ok, msg, extra) => {
+      skipping = false;
+      extra === undefined ? log(msg) : log(msg, extra);
+      if (ok) toast("⏭ Đã bỏ qua quảng cáo");
+      if (typeof onEnd === "function") onEnd(ok);
     };
 
-    const afterClick = () => {
+    const tick = () => {
       const buttons = findSkipButtons();
-      if (!buttons.length) return done(`Đã skip xong (sau ${clicks} lần bấm).`);
-      if (clicks < MAX_CLICKS) return clickOnce(buttons); // Nút vẫn còn -> bấm lại.
-      seekToEnd();
-    };
-
-    const seekToEnd = () => {
-      const video = getVideo();
-      const canSeek = video && isFinite(video.duration) && video.duration > 0 &&
-        !video.ended && video.duration - video.currentTime > 0.5;
-      if (!canSeek) {
-        log(`Bấm ${clicks} lần không có tác dụng, và không còn video để tua (trang tĩnh?). Chẩn đoán:`,
-          describeAdButtons());
-        skipping = false;
-        return;
+      if (!buttons.length) {
+        return finish(true, `+${ms()}ms: nút Skip đã biến mất sau ${clicks} lần bấm${seeked ? " (có tua)" : ""}.`);
       }
-      log(`Bấm ${clicks} lần không có tác dụng, tua quảng cáo tới cuối (${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s).`);
-      video.currentTime = video.duration;
-      setTimeout(() => {
-        if (findSkipButton()) {
-          log("Vẫn còn nút Skip sau khi tua. Chẩn đoán:", describeAdButtons());
-          skipping = false;
-        } else {
-          done("Đã tua hết quảng cáo.");
-        }
-      }, 1000);
+      if (ms() > GIVE_UP_AFTER_MS) {
+        return finish(false, `+${ms()}ms: bấm ${clicks} lần không được, dừng. Chẩn đoán:`, describeAdButtons());
+      }
+
+      clicks++;
+      if (clicks <= 3 || clicks % 4 === 0) { // Đủ để chẩn đoán, không spam console.
+        log(`+${ms()}ms: bấm nút Skip lần ${clicks} (${buttons.length} nút):`,
+          buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")),
+          "| ad-showing:", isAdShowing());
+      }
+      for (const b of buttons) simulateClick(b);
+
+      const video = !seeked && clicks > SEEK_AFTER_CLICKS && seekableAd();
+      if (video) {
+        seeked = true;
+        log(`+${ms()}ms: click chưa có tác dụng, tua quảng cáo tới cuối (${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s).`);
+        video.currentTime = video.duration;
+      }
+      setTimeout(tick, CLICK_EVERY_MS);
     };
 
-    const buttons = findSkipButtons();
-    clickOnce(buttons.length ? buttons : [button]);
+    tick();
     return true;
   }
 
