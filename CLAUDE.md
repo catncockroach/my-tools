@@ -22,7 +22,7 @@ python3 -m json.tool youtube-tools/manifest.json >/dev/null
 
 Every change to an extension must bump `"version"` in its `manifest.json`, in the same commit, so the user can confirm in `chrome://extensions` that the reload picked up the update. Bump the patch for fixes/tweaks (1.2.3 → 1.2.4), the minor for new features (1.2.4 → 1.3.0). Mention the new version number in the final reply.
 
-After changing code: bump the version, run the sync script, then the user clicks Reload on the extension in `chrome://extensions` and refreshes the page. Changing the Windows folder path makes Chrome treat it as a new extension (new ID, settings reset), so keep the destination path stable.
+After changing code: bump the version, run the sync script, then the user reloads the extension (for youtube-tools: click the version chip in the popup, which calls `chrome.runtime.reload()` and shows `↻ vX` when the synced manifest on disk is newer; otherwise Reload in `chrome://extensions`) and refreshes the page. Changing the Windows folder path makes Chrome treat it as a new extension (new ID, settings reset), so keep the destination path stable.
 
 When adding a new extension, add a row to the table in `README.md`.
 

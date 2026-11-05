@@ -12,7 +12,7 @@ Nơi chứa các Chrome extension dùng cá nhân. Mỗi extension là một th�
 2. Mở `chrome://extensions`, bật **Developer mode**.
 3. Bấm **Load unpacked** → chọn thư mục extension, ví dụ `C:\Users\haihv\Downloads\chrome-extension\youtube-tools`.
 
-Sau khi sửa code: chạy lại `./sync-to-windows.sh`, bấm ↻ (Reload) trên thẻ extension trong `chrome://extensions`, rồi F5 trang web.
+Sau khi sửa code: chạy lại `./sync-to-windows.sh`, bấm ↻ (Reload) trên thẻ extension trong `chrome://extensions`, rồi F5 trang web. Với youtube-tools có thể bấm vào ô version trong popup thay cho bước Reload (ô hiện `↻ vX` khi có bản mới chưa nạp).
 
 ## Thêm extension mới
 

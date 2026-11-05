@@ -3,7 +3,29 @@ const status = document.getElementById("status");
 const defaults = {};
 for (const f of YTT_FEATURES) defaults[f.id] = f.defaultEnabled;
 
-document.getElementById("version").textContent = "v" + chrome.runtime.getManifest().version;
+// Ô version: bấm để tải lại extension, giống nút Reload trong chrome://extensions
+// (nạp code mới vừa copy sang). Tab YouTube đang mở vẫn cần F5 để chạy code mới.
+const versionChip = document.getElementById("version");
+const loadedVersion = chrome.runtime.getManifest().version;
+versionChip.textContent = "v" + loadedVersion;
+versionChip.title = "Bấm để tải lại extension";
+versionChip.addEventListener("click", () => {
+  versionChip.disabled = true;
+  versionChip.textContent = "Đang tải lại…";
+  setTimeout(() => chrome.runtime.reload(), 150); // Popup sẽ tự đóng.
+});
+
+// Extension cài dạng unpacked đọc file trực tiếp từ đĩa, nên manifest.json trên đĩa có thể
+// mới hơn bản đang chạy -> báo có bản mới.
+fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" })
+  .then((r) => r.json())
+  .then(({ version }) => {
+    if (!version || version === loadedVersion || versionChip.disabled) return;
+    versionChip.textContent = "↻ v" + version;
+    versionChip.title = `Đang chạy v${loadedVersion}, có bản v${version}. Bấm để cập nhật.`;
+    versionChip.classList.add("update");
+  })
+  .catch(() => {});
 
 // Cập nhật dòng "x/y đang bật" và hiệu ứng ở logo.
 function updateStatus(features) {
