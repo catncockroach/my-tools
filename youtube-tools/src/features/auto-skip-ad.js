@@ -4,22 +4,30 @@
 YTT.register("autoSkipAd", (() => {
   "use strict";
 
-  const CHECK_INTERVAL_MS = 100;
+  // Kiểm tra theo 2 tốc độ: chậm khi không có quảng cáo (đỡ tốn CPU), nhanh khi có dấu hiệu
+  // quảng cáo. Giữ tốc độ nhanh thêm một lúc sau quảng cáo, vì quảng cáo kế tiếp hoặc màn hình
+  // kết thúc (có thể không còn class "ad-showing") hay xuất hiện ngay sau đó.
+  const FAST_MS = 100;
+  const SLOW_MS = 500;
+  const STAY_FAST_MS = 5000;
   const REPORT_AFTER_MS = 8000; // Quảng cáo kéo dài mà chưa thấy nút Skip -> in chẩn đoán.
 
   let timer = null;
   let adStartedAt = 0;
   let buttonSeenAt = 0;
   let reported = false;
+  let lastAdSignal = 0; // Lần cuối thấy quảng cáo hoặc nút Skip.
   let gaveUp = false; // skipAd đã bó tay với nút đang hiện -> chờ nút biến mất rồi mới thử lại.
 
   function check() {
     const button = YTT.findSkipButton();
+    const adShowing = YTT.isAdShowing();
+    if (button || adShowing) lastAdSignal = Date.now();
 
     if (!button) {
       buttonSeenAt = 0;
       gaveUp = false;
-      if (!YTT.isAdShowing()) { adStartedAt = 0; return; }
+      if (!adShowing) { adStartedAt = 0; return; }
     }
 
     if (!adStartedAt) {
@@ -44,8 +52,14 @@ YTT.register("autoSkipAd", (() => {
     }
   }
 
+  function loop() {
+    try { check(); } catch (e) { YTT.log("Lỗi khi kiểm tra quảng cáo:", e); }
+    const fast = Date.now() - lastAdSignal < STAY_FAST_MS;
+    timer = setTimeout(loop, fast ? FAST_MS : SLOW_MS);
+  }
+
   return {
-    start() { if (!timer) timer = setInterval(check, CHECK_INTERVAL_MS); },
-    stop() { clearInterval(timer); timer = null; }
+    start() { if (!timer) loop(); },
+    stop() { clearTimeout(timer); timer = null; }
   };
 })());
