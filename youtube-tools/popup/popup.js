@@ -1,5 +1,5 @@
 const list = document.getElementById("list");
-const footer = document.getElementById("footer");
+const status = document.getElementById("status");
 const defaults = {};
 for (const f of YTT_FEATURES) defaults[f.id] = f.defaultEnabled;
 
@@ -13,11 +13,11 @@ function updateStatus(features) {
   document.body.classList.toggle("active", on > 0);
 }
 
-// Hiện "✓ Đã lưu" thoáng qua ở footer.
+// Hiện "✓ Đã lưu" thoáng qua ở dòng trạng thái.
 function flashSaved() {
-  footer.classList.add("flash");
+  status.classList.add("flash");
   clearTimeout(flashSaved.t);
-  flashSaved.t = setTimeout(() => footer.classList.remove("flash"), 1400);
+  flashSaved.t = setTimeout(() => status.classList.remove("flash"), 1200);
 }
 
 chrome.storage.sync.get({ features: defaults }, ({ features }) => {
@@ -26,11 +26,10 @@ chrome.storage.sync.get({ features: defaults }, ({ features }) => {
     row.className = "feature";
     row.style.setProperty("--i", i);
     row.innerHTML =
-      `<span class="num"></span><span class="name"></span>` +
-      `<input type="checkbox" class="switch"><p class="desc"></p>`;
+      `<span class="num"></span><span class="name"></span><input type="checkbox" class="switch">`;
     row.querySelector(".num").textContent = String(i + 1).padStart(2, "0");
     row.querySelector(".name").textContent = f.name;
-    row.querySelector(".desc").textContent = f.description;
+    row.title = f.description; // Mô tả chỉ hiện khi rê chuột.
 
     const box = row.querySelector("input");
     box.checked = features[f.id] ?? f.defaultEnabled;
