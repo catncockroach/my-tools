@@ -20,7 +20,9 @@ for f in youtube-tools/src/*.js youtube-tools/src/features/*.js youtube-tools/po
 python3 -m json.tool youtube-tools/manifest.json >/dev/null
 ```
 
-After changing code: run the sync script, then the user clicks Reload on the extension in `chrome://extensions` and refreshes the page. Changing the Windows folder path makes Chrome treat it as a new extension (new ID, settings reset), so keep the destination path stable.
+Every change to an extension must bump `"version"` in its `manifest.json`, in the same commit, so the user can confirm in `chrome://extensions` that the reload picked up the update. Bump the patch for fixes/tweaks (1.2.3 → 1.2.4), the minor for new features (1.2.4 → 1.3.0). Mention the new version number in the final reply.
+
+After changing code: bump the version, run the sync script, then the user clicks Reload on the extension in `chrome://extensions` and refreshes the page. Changing the Windows folder path makes Chrome treat it as a new extension (new ID, settings reset), so keep the destination path stable.
 
 When adding a new extension, add a row to the table in `README.md`.
 
