@@ -36,13 +36,13 @@ YTT.register("speedUpAd", (() => {
       if (!inAd) {
         inAd = true;
         saved = pickSaved();
-        YTT.log(`Quảng cáo bắt đầu: tắt tiếng, tua x${AD_RATE}. (Video chính: x${saved.rate}${saved.muted ? ", đang tắt tiếng" : ""})`);
+        YTT.log(`ad-showing bật: đặt tốc độ x${AD_RATE}, tắt tiếng. Đã lưu để khôi phục: x${saved.rate}, muted=${saved.muted}.`);
       }
       enforce();
     } else if (inAd) {
       inAd = false;
       restore();
-      YTT.log(`Hết quảng cáo: trả lại tốc độ x${saved.rate}${saved.muted ? "" : ", bật tiếng"}.`);
+      YTT.log(`ad-showing tắt: khôi phục tốc độ x${saved.rate}, muted=${saved.muted}.`);
     }
   }
 

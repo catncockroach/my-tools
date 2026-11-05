@@ -162,7 +162,7 @@ var YTT = (() => {
     const t0 = performance.now();
     const ms = () => Math.round(performance.now() - t0);
     let clicks = 0;
-    let seeked = false;
+    let seekedAt = -1; // Mốc (ms) đã tua video tới cuối, -1 = chưa tua.
 
     const finish = (ok, msg, extra) => {
       skipping = false;
@@ -174,24 +174,24 @@ var YTT = (() => {
     const tick = () => {
       const buttons = findSkipButtons();
       if (!buttons.length) {
-        return finish(true, `+${ms()}ms: nút Skip đã biến mất sau ${clicks} lần bấm${seeked ? " (có tua)" : ""}.`);
+        return finish(true, `+${ms()}ms: không còn nút Skip. Đã bấm ${clicks} lần${seekedAt >= 0 ? `, đã tua video lúc +${seekedAt}ms` : ", không tua"}.`);
       }
       if (ms() > GIVE_UP_AFTER_MS) {
-        return finish(false, `+${ms()}ms: bấm ${clicks} lần không được, dừng. Chẩn đoán:`, describeAdButtons());
+        return finish(false, `+${ms()}ms: quá ${GIVE_UP_AFTER_MS / 1000}s, dừng bấm. Đã bấm ${clicks} lần, nút Skip vẫn còn. Trạng thái:`, describeAdButtons());
       }
 
       clicks++;
       if (clicks <= 3 || clicks % 4 === 0) { // Đủ để chẩn đoán, không spam console.
-        log(`+${ms()}ms: bấm nút Skip lần ${clicks} (${buttons.length} nút):`,
+        log(`+${ms()}ms: bấm lần ${clicks} vào ${buttons.length} nút Skip:`,
           buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")),
           "| ad-showing:", isAdShowing());
       }
       for (const b of buttons) simulateClick(b);
 
-      const video = !seeked && clicks > SEEK_AFTER_CLICKS && seekableAd();
+      const video = seekedAt < 0 && clicks > SEEK_AFTER_CLICKS && seekableAd();
       if (video) {
-        seeked = true;
-        log(`+${ms()}ms: click chưa có tác dụng, tua quảng cáo tới cuối (${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s).`);
+        seekedAt = ms();
+        log(`+${ms()}ms: nút Skip vẫn còn sau ${clicks - 1} lần bấm, tua video ${video.currentTime.toFixed(1)}s -> ${video.duration.toFixed(1)}s.`);
         video.currentTime = video.duration;
       }
       setTimeout(tick, CLICK_EVERY_MS);

@@ -33,13 +33,13 @@ YTT.register("autoSkipAd", (() => {
     if (!adStartedAt) {
       adStartedAt = Date.now();
       reported = false;
-      YTT.log("Phát hiện quảng cáo, đang chờ nút Skip...");
+      YTT.log(`Bắt đầu theo dõi: ad-showing=${adShowing}, nút Skip=${button ? "có" : "không"}.`);
     }
 
     if (button) {
       if (!buttonSeenAt) {
         buttonSeenAt = Date.now();
-        YTT.log(`Thấy nút Skip (quảng cáo đã chạy ${((buttonSeenAt - adStartedAt) / 1000).toFixed(1)}s).`);
+        YTT.log(`Thấy nút Skip, +${((buttonSeenAt - adStartedAt) / 1000).toFixed(1)}s kể từ lúc bắt đầu theo dõi.`);
       }
       if (gaveUp || YTT.isSkipping()) return;
       YTT.skipAd((ok) => { if (!ok) gaveUp = true; });
@@ -48,7 +48,7 @@ YTT.register("autoSkipAd", (() => {
 
     if (!reported && Date.now() - adStartedAt > REPORT_AFTER_MS) {
       reported = true;
-      YTT.log("Quá 8 giây chưa thấy nút Skip (có thể quảng cáo không cho skip). Chẩn đoán:", YTT.describeAdButtons());
+      YTT.log(`${REPORT_AFTER_MS / 1000}s kể từ lúc bắt đầu theo dõi, chưa thấy nút Skip. Trạng thái:`, YTT.describeAdButtons());
     }
   }
 
