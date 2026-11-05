@@ -15,6 +15,7 @@ YTT.register("autoSkipAd", (() => {
   let timer = null;
   let adStartedAt = 0;
   let buttonSeenAt = 0;
+  let buttonEverSeen = false; // Đã thấy nút Skip trong lượt theo dõi này chưa.
   let reported = false;
   let lastAdSignal = 0; // Lần cuối thấy quảng cáo hoặc nút Skip.
   let gaveUp = false; // skipAd đã bó tay với nút đang hiện -> chờ nút biến mất rồi mới thử lại.
@@ -33,12 +34,14 @@ YTT.register("autoSkipAd", (() => {
     if (!adStartedAt) {
       adStartedAt = Date.now();
       reported = false;
+      buttonEverSeen = false;
       YTT.log(`Bắt đầu theo dõi: ad-showing=${adShowing}, nút Skip=${button ? "có" : "không"}.`);
     }
 
     if (button) {
       if (!buttonSeenAt) {
         buttonSeenAt = Date.now();
+        buttonEverSeen = true;
         YTT.log(`Thấy nút Skip, +${((buttonSeenAt - adStartedAt) / 1000).toFixed(1)}s kể từ lúc bắt đầu theo dõi.`);
       }
       if (gaveUp || YTT.isSkipping()) return;
@@ -46,7 +49,7 @@ YTT.register("autoSkipAd", (() => {
       return;
     }
 
-    if (!reported && Date.now() - adStartedAt > REPORT_AFTER_MS) {
+    if (!reported && !buttonEverSeen && Date.now() - adStartedAt > REPORT_AFTER_MS) {
       reported = true;
       YTT.log(`${REPORT_AFTER_MS / 1000}s kể từ lúc bắt đầu theo dõi, chưa thấy nút Skip. Trạng thái:`, YTT.describeAdButtons());
     }

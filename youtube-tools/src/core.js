@@ -183,7 +183,7 @@ var YTT = (() => {
       clicks++;
       if (clicks <= 3 || clicks % 4 === 0) { // Đủ để chẩn đoán, không spam console.
         log(`+${ms()}ms: bấm lần ${clicks} vào ${buttons.length} nút Skip:`,
-          buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")),
+          buttons.map((b) => labelOf(b).slice(0, 80) + (isOnTop(b) ? "" : " [bị che]")).join(" | "),
           "| ad-showing:", isAdShowing());
       }
       for (const b of buttons) simulateClick(b);
