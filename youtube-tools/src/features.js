@@ -15,8 +15,8 @@ var YTT_FEATURES = [
   },
   {
     id: "speedUpAd",
-    name: "Tua nhanh quảng cáo x16",
-    description: "Đang có quảng cáo thì tắt tiếng và chạy nhanh x16, kể cả quảng cáo không cho skip. Hết quảng cáo tự trả lại tốc độ và âm thanh.",
+    name: "Tua nhanh quảng cáo x3",
+    description: "Đang có quảng cáo thì tắt tiếng và chạy nhanh x3, kể cả quảng cáo không cho skip. Hết quảng cáo tự trả lại tốc độ và âm thanh.",
     defaultEnabled: true
   },
   {

@@ -1,11 +1,11 @@
-// Tính năng: đang có quảng cáo thì tắt tiếng và tua nhanh x16, hết quảng cáo thì trả lại như cũ.
+// Tính năng: đang có quảng cáo thì tắt tiếng và tua nhanh x3, hết quảng cáo thì trả lại như cũ.
 // Quảng cáo và video chính dùng chung một thẻ <video>, nên phải nhớ tốc độ/âm thanh của video
 // chính để khôi phục. Chỉ tin class "ad-showing" của player (không dùng cách đoán dự phòng
 // của isAdShowing), để không bao giờ tua nhầm video chính.
 YTT.register("speedUpAd", (() => {
   "use strict";
 
-  const AD_RATE = 16;            // Tốc độ tối đa Chrome cho phép.
+  const AD_RATE = 3;             // x16 làm video giật, x3 vẫn mượt.
   const FIND_PLAYER_MS = 1000;   // Chờ player xuất hiện / bị thay (YouTube là SPA).
   const SETTLE_MS = 1000;        // YouTube có thể đặt lại x1 ngay trước khi gắn class quảng cáo.
 
