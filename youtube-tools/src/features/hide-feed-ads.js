@@ -1,4 +1,4 @@
-// Tính năng: ẩn thẻ quảng cáo ("Sponsored") trong trang chủ, kết quả tìm kiếm, cột đề xuất, banner.
+// Tính năng: ẩn thẻ quảng cáo ("Sponsored") trong trang chủ, kết quả tìm kiếm, cột đề xuất, panel quảng cáo, banner.
 // Chỉ chèn CSS (không vòng lặp, không theo dõi DOM): nhẹ, áp dụng luôn cho quảng cáo nạp thêm khi cuộn.
 // Ẩn cả ô chứa quảng cáo (dùng :has) để lưới video không bị trống một ô.
 // Không đụng tới quảng cáo trong player, để không ảnh hưởng tới việc tìm nút Skip.
@@ -24,6 +24,10 @@ YTT.register("hideFeedAds", (() => {
     "ytd-search-pyv-renderer",
     "ytd-companion-slot-renderer",
     "ytd-player-legacy-desktop-watch-ads-renderer",
+    // Panel quảng cáo phía trên cột đề xuất ở trang xem video (target-id "engagement-panel-ads",
+    // "engagement-panel-ads-business-agent-chat"...).
+    "ytd-engagement-panel-section-list-renderer[target-id^='engagement-panel-ads']",
+    "ytd-ads-engagement-panel-content-renderer",
     // Banner quảng cáo đầu trang chủ.
     "#masthead-ad",
     "ytd-banner-promo-renderer",

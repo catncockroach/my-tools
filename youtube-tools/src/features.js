@@ -28,7 +28,7 @@ var YTT_FEATURES = [
   {
     id: "hideFeedAds",
     name: "Ẩn thẻ quảng cáo trong danh sách video",
-    description: "Ẩn thẻ quảng cáo (Sponsored) ở trang chủ, kết quả tìm kiếm, cột video đề xuất và banner đầu trang.",
+    description: "Ẩn thẻ quảng cáo (Sponsored) ở trang chủ, kết quả tìm kiếm, cột video đề xuất, panel quảng cáo ở trang xem video và banner đầu trang.",
     defaultEnabled: true
   }
 ];
