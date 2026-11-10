@@ -2,6 +2,8 @@
 // Quảng cáo và video chính dùng chung một thẻ <video>, nên phải nhớ tốc độ/âm thanh của video
 // chính để khôi phục. Chỉ tin class "ad-showing" của player (không dùng cách đoán dự phòng
 // của isAdShowing), để không bao giờ tua nhầm video chính.
+// Khi đang xem live (kể cả dạng quảng cáo song song, live thu nhỏ chạy cạnh quảng cáo) thì chỉ
+// tắt tiếng, không tua nhanh, vì tua nhanh làm live bị lag.
 YTT.register("speedUpAd", (() => {
   "use strict";
 
@@ -15,6 +17,8 @@ YTT.register("speedUpAd", (() => {
   let findTimer = null;
 
   let inAd = false;
+  let contentLive = false; // Video chính (đo lúc không có quảng cáo) có phải live không.
+  let adIsLive = false;    // Quảng cáo hiện tại xuất hiện trong lúc xem live.
   // Lịch sử ngắn trạng thái video chính (khi không có quảng cáo): { rate, muted, at }.
   let history = [];
   // Trạng thái sẽ khôi phục khi hết quảng cáo.
@@ -24,10 +28,28 @@ YTT.register("speedUpAd", (() => {
     return !!player && player.classList.contains("ad-showing");
   }
 
+  // Các dấu hiệu cho thấy đang xem live. Trả về danh sách dấu hiệu khớp (rỗng = không phải live).
+  function liveSignals() {
+    if (!player) return [];
+    const signals = [];
+    if (player.classList.contains("ytp-live")) signals.push("player.ytp-live");
+    if (player.querySelector(".ytp-time-display.ytp-live")) signals.push(".ytp-time-display.ytp-live");
+    if (player.querySelectorAll("video").length > 1) signals.push("nhiều thẻ <video>");
+    return signals;
+  }
+
   // Ép tốc độ/tắt tiếng trong lúc quảng cáo (YouTube có thể tự đặt lại tốc độ).
   function enforce() {
     if (!video) return;
-    if (video.playbackRate !== AD_RATE) video.playbackRate = AD_RATE;
+    if (!adIsLive && liveSignals().length) {
+      adIsLive = true;
+      YTT.log(`Đang quảng cáo, thấy dấu hiệu live (${liveSignals().join(", ")}): bỏ tua nhanh, chỉ tắt tiếng.`);
+    }
+    if (adIsLive) {
+      if (video.playbackRate === AD_RATE) video.playbackRate = saved.rate;
+    } else if (video.playbackRate !== AD_RATE) {
+      video.playbackRate = AD_RATE;
+    }
     if (!video.muted) video.muted = true;
   }
 
@@ -36,11 +58,17 @@ YTT.register("speedUpAd", (() => {
       if (!inAd) {
         inAd = true;
         saved = pickSaved();
-        YTT.log(`ad-showing bật: đặt tốc độ x${AD_RATE}, tắt tiếng. Đã lưu để khôi phục: x${saved.rate}, muted=${saved.muted}.`);
+        const signals = liveSignals();
+        adIsLive = contentLive || signals.length > 0;
+        if (contentLive) signals.unshift("video chính là live");
+        YTT.log(adIsLive
+          ? `ad-showing bật, live (${signals.join(", ")}): chỉ tắt tiếng, giữ tốc độ. Đã lưu để khôi phục: x${saved.rate}, muted=${saved.muted}.`
+          : `ad-showing bật: đặt tốc độ x${AD_RATE}, tắt tiếng. Đã lưu để khôi phục: x${saved.rate}, muted=${saved.muted}.`);
       }
       enforce();
     } else if (inAd) {
       inAd = false;
+      adIsLive = false;
       restore();
       YTT.log(`ad-showing tắt: khôi phục tốc độ x${saved.rate}, muted=${saved.muted}.`);
     }
@@ -105,6 +133,7 @@ YTT.register("speedUpAd", (() => {
       }
     }
     attachVideo(player ? player.querySelector("video") : null);
+    if (player && !adShowing()) contentLive = liveSignals().length > 0;
     update();
   }
 
@@ -121,6 +150,8 @@ YTT.register("speedUpAd", (() => {
       classObserver = null;
       if (inAd) restore(); // Tắt giữa quảng cáo -> trả lại ngay.
       inAd = false;
+      adIsLive = false;
+      contentLive = false;
       detachVideo();
       player = null;
     }
