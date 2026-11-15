@@ -1,0 +1,67 @@
+name: screen-hud
+
+# Build screen-hud trên Windows (MSVC).
+# - push/PR đụng tới screen-hud/: build, upload exe làm artifact.
+# - push tag screen-hud-vX.Y.Z: build rồi tạo GitHub Release kèm exe.
+on:
+  push:
+    branches: [main]
+    paths: ["screen-hud/**", ".github/workflows/screen-hud.yml"]
+    tags: ["screen-hud-v*"]
+  pull_request:
+    paths: ["screen-hud/**", ".github/workflows/screen-hud.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: screen-hud
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: screen-hud
+
+      - name: Đọc version
+        id: version
+        run: |
+          v=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "screen-hud v$v"
+
+      - name: Tag phải khớp version trong Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          expected="screen-hud-v${{ steps.version.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "Tag $GITHUB_REF_NAME khác $expected" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Kích thước exe
+        run: ls -l target/release/screen-hud.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screen-hud-v${{ steps.version.outputs.version }}
+          path: screen-hud/target/release/screen-hud.exe
+
+      - name: Tạo release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp target/release/screen-hud.exe "screen-hud-v${{ steps.version.outputs.version }}.exe"
+          gh release create "$GITHUB_REF_NAME" "screen-hud-v${{ steps.version.outputs.version }}.exe" \
+            --title "screen-hud v${{ steps.version.outputs.version }}" \
+            --generate-notes

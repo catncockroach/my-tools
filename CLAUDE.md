@@ -4,11 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A repo of personal Chrome extensions (Manifest V3, plain JavaScript, no build step, no dependencies, no tests). Each top-level folder containing a `manifest.json` is one extension. The user communicates in Vietnamese; UI strings, comments and READMEs are in Vietnamese.
+`my-tools`: a repo of personal tools, one top-level folder per tool. Two kinds so far:
 
-Development happens in WSL, but Chrome runs on Windows, so extensions must be copied to the Windows drive before Chrome can load them.
+- **Chrome extensions** (Manifest V3, plain JavaScript, no build step, no dependencies, no tests). Each top-level folder containing a `manifest.json` is one extension.
+- **Windows apps in Rust**: `screen-hud/` (see its section below).
 
-## Commands
+The user communicates in Vietnamese; UI strings, comments and READMEs are in Vietnamese.
+
+Development happens in WSL, but Chrome and the Windows apps run on Windows, so code must be copied to the Windows drive before it can be loaded or built.
+
+When adding a new tool, add a row to the table in `README.md`.
+
+## Chrome extensions
+
+### Commands
 
 ```bash
 ./sync-to-windows.sh                 # copy all extensions to C:\Users\haihv\Downloads\chrome-extension\
@@ -24,9 +33,7 @@ Every change to an extension must bump `"version"` in its `manifest.json`, in th
 
 After changing code: bump the version, run the sync script, then the user reloads the extension (for youtube-tools: click the version chip in the popup, which calls `chrome.runtime.reload()` and shows `↻ vX` when the synced manifest on disk is newer; otherwise Reload in `chrome://extensions`) and refreshes the page. Changing the Windows folder path makes Chrome treat it as a new extension (new ID, settings reset), so keep the destination path stable.
 
-When adding a new extension, add a row to the table in `README.md`.
-
-## youtube-tools architecture
+### youtube-tools architecture
 
 A feature-module system so new YouTube features can be added without touching existing ones.
 
@@ -40,6 +47,30 @@ Ad blocking at the source: `src/page/block-ads.js` is a separate content script 
 Content-script load order in `manifest.json` matters: `features.js` → `core.js` → `features/*.js` → `main.js`. A new feature needs three edits: an entry in `features.js`, a new file in `src/features/`, and that file listed in `manifest.json` before `src/main.js`.
 
 Ad-skip details: an ad is detected via the `ad-showing` class on `#movie_player`. `skipAd` clicks the skip button, then after 300 ms, if the ad is still showing with a skip button, it seeks the ad video to its end, because YouTube may ignore synthetic (untrusted) clicks. Skip-button selectors live in `SKIP_SELECTORS` in `core.js`, and those selectors are the first thing to update when YouTube changes its markup.
+
+## screen-hud (Windows, Rust)
+
+A tiny always-running background process that shows a faded, click-through overlay in the bottom-right corner of the screen (above the taskbar). Today it shows battery % of connected Bluetooth devices. **Minimal RAM/CPU of the background process is the primary requirement**: no webview or heavy runtime in it, no render loop (redraw only when content changes), event-driven where possible, and measure with `./dev.sh mem` after changes. A future settings window (Tauri) is meant to run as a separate, on-demand process so the background process never loads WebView2.
+
+```bash
+screen-hud/dev.sh build        # rsync source to C:\Users\haihv\dev\screen-hud, cargo.exe build --release there
+screen-hud/dev.sh run [--all]  # build, kill running instance, start it
+screen-hud/dev.sh list         # build, print devices (name, %, connected) to stdout
+screen-hud/dev.sh mem          # RAM/handles/CPU time of the running instance
+```
+
+The Rust toolchain is installed on Windows only, not in WSL; building from the `\\wsl$` path is slow, hence the rsync. WSL interop sometimes fails at process start with `UtilAcceptVsock: accept4 failed 110`; `dev.sh` retries those calls.
+
+Local Windows toolchain is `stable-x86_64-pc-windows-gnu` (minimal profile, self-contained linker). Visual Studio Build Tools were deliberately not installed (too heavy for the user's laptop); do not install them. CI (`.github/workflows/screen-hud.yml`, `windows-latest`, MSVC) builds on every push/PR touching `screen-hud/` and uploads the exe as an artifact; pushing a tag `screen-hud-vX.Y.Z` (must equal the `Cargo.toml` version) also creates a GitHub Release with the exe. `Cargo.lock` is committed (`dev.sh build` copies it back from the Windows build dir) because CI builds with `--locked`.
+
+Every change must bump `version` in `screen-hud/Cargo.toml` in the same commit (same patch/minor rules as extensions).
+
+Architecture (`screen-hud/src/`), plain Win32 via `windows-sys`:
+
+- `battery.rs`: battery % is the PnP property `{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2` (what Settings > Bluetooth shows; HFP headsets and BLE devices). It is the last value Windows received and persists after disconnect, so it is joined by ContainerId with the Device Container properties `System.Devices.Connected` and `System.ItemNameDisplay`. Do not use Association Endpoint (AEP) queries: a Bluetooth AEP query (DevGetObjects or WinRT FindAllAsync, even filtered on IsPaired) runs a ~30 s radio scan per protocol before returning. Read with DevQuery (`DevGetObjects`), not WinRT, to avoid loading WinRT. `watch()` registers `DevCreateObjectQuery` callbacks that post a message to the UI thread; plus a 60 s poll for battery changes.
+- `overlay.rs`: layered window (`WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`). Text is drawn with GDI as white-on-black grayscale AA, the luminance becomes the alpha mask, and the backdrop/shadow/colour are composed by hand into premultiplied BGRA for `UpdateLayeredWindow`. The DIB is freed right after.
+- `tray.rs`: tray icon and context menu.
+- `main.rs`: a hidden control window (tray, timers, DevQuery messages) plus the overlay window; state in a `thread_local` `RefCell` (borrow briefly, never across calls that can re-enter the wndproc such as `TrackPopupMenu`). Hides itself when a fullscreen app runs (`SHQueryUserNotificationState`, 2 s timer). Single instance via the `Local\screen-hud` mutex.
 
 ## Commits
 
