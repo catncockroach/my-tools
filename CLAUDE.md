@@ -54,14 +54,14 @@ A tiny always-running background process that shows a faded, click-through overl
 
 ```bash
 screen-hud/dev.sh build        # rsync source to C:\Users\haihv\dev\screen-hud, cargo.exe build --release there
-screen-hud/dev.sh run [--all]  # build, kill running instance, start it
+screen-hud/dev.sh run [--all]  # kill running instance, build, start it with --portable
 screen-hud/dev.sh list         # build, print devices (name, %, connected) to stdout
 screen-hud/dev.sh mem          # RAM/handles/CPU time of the running instance
 ```
 
 The Rust toolchain is installed on Windows only, not in WSL; building from the `\\wsl$` path is slow, hence the rsync. WSL interop sometimes fails at process start with `UtilAcceptVsock: accept4 failed 110`; `dev.sh` retries those calls.
 
-Local Windows toolchain is `stable-x86_64-pc-windows-gnu` (minimal profile, self-contained linker). Visual Studio Build Tools were deliberately not installed (too heavy for the user's laptop); do not install them. CI (`.github/workflows/screen-hud.yml`, `windows-latest`, MSVC) builds on every push/PR touching `screen-hud/` and uploads the exe as an artifact; pushing a tag `screen-hud-vX.Y.Z` (must equal the `Cargo.toml` version) also creates a GitHub Release with the exe. `Cargo.lock` is committed (`dev.sh build` copies it back from the Windows build dir) because CI builds with `--locked`.
+Local Windows toolchain is `stable-x86_64-pc-windows-gnu` (minimal profile, self-contained linker). Visual Studio Build Tools were deliberately not installed (too heavy for the user's laptop); do not install them. CI (`.github/workflows/screen-hud.yml`, `windows-latest`, MSVC) builds on every push/PR touching `screen-hud/` as a compile check (no artifacts); pushing a tag `screen-hud-vX.Y.Z` (must equal the `Cargo.toml` version) also creates a GitHub Release with the exe. `Cargo.lock` is committed (`dev.sh build` copies it back from the Windows build dir) because CI builds with `--locked`.
 
 Every change must bump `version` in `screen-hud/Cargo.toml` in the same commit (same patch/minor rules as extensions).
 
@@ -69,7 +69,8 @@ Architecture (`screen-hud/src/`), plain Win32 via `windows-sys`:
 
 - `battery.rs`: battery % is the PnP property `{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2` (what Settings > Bluetooth shows; HFP headsets and BLE devices). It is the last value Windows received and persists after disconnect, so it is joined by ContainerId with the Device Container properties `System.Devices.Connected` and `System.ItemNameDisplay`. Do not use Association Endpoint (AEP) queries: a Bluetooth AEP query (DevGetObjects or WinRT FindAllAsync, even filtered on IsPaired) runs a ~30 s radio scan per protocol before returning. Read with DevQuery (`DevGetObjects`), not WinRT, to avoid loading WinRT. `watch()` registers `DevCreateObjectQuery` callbacks that post a message to the UI thread; plus a 60 s poll for battery changes.
 - `overlay.rs`: layered window (`WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`). Text is drawn with GDI as white-on-black grayscale AA, the luminance becomes the alpha mask, and the backdrop/shadow/colour are composed by hand into premultiplied BGRA for `UpdateLayeredWindow`. The DIB is freed right after.
-- `tray.rs`: tray icon and context menu.
+- `install.rs`: the exe installs itself, no installer tooling. Run from anywhere other than `%LOCALAPPDATA%\Programs\screen-hud` (and without `--portable`), it closes a running instance (finds the `ScreenHudCtl` window, posts `WM_CLOSE`, waits), copies itself there, writes the HKCU Run and Uninstall keys, launches the installed copy and shows a message box. That same path is the update flow (download the new exe, run it). `--uninstall` (Settings > Apps) removes the keys and `HKCU\Software\screen-hud`, then deletes the folder via a delayed `cmd` after the message box closes. Settings live in `HKCU\Software\screen-hud`. `dev.sh run` always passes `--portable`, so dev builds never install.
+- `tray.rs`: tray icon and context menu. The icon is drawn at runtime from the Segoe Fluent Icons font (lowest connected battery glyph, or Bluetooth glyph), black or white per `SystemUsesLightTheme`; no `.ico` resource.
 - `main.rs`: a hidden control window (tray, timers, DevQuery messages) plus the overlay window; state in a `thread_local` `RefCell` (borrow briefly, never across calls that can re-enter the wndproc such as `TrackPopupMenu`). Hides itself when a fullscreen app runs (`SHQueryUserNotificationState`, 2 s timer). Single instance via the `Local\screen-hud` mutex.
 
 ## Commits

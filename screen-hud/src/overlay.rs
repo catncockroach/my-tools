@@ -204,7 +204,7 @@ unsafe fn make_font(px: i32, weight: i32, face: &str) -> HFONT {
 }
 
 /// Windows 11 có Segoe Fluent Icons; Windows 10 chỉ có Segoe MDL2 Assets (cùng mã ký tự pin).
-unsafe fn make_icon_font(dc: HDC, px: i32) -> HFONT {
+pub(crate) unsafe fn make_icon_font(dc: HDC, px: i32) -> HFONT {
     for face in ["Segoe Fluent Icons", "Segoe MDL2 Assets"] {
         let f = make_font(px, FW_NORMAL as i32, face);
         let old = SelectObject(dc, f);

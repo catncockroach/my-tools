@@ -6,14 +6,18 @@
 //! - sau mỗi lần cập nhật, trả lại bộ nhớ working set không dùng cho hệ thống.
 //!
 //! Dòng lệnh:
-//!   screen-hud.exe          chạy nền (overlay + icon khay)
-//!   screen-hud.exe --all    như trên, hiện cả thiết bị chưa kết nối (chỉ để chẩn đoán)
-//!   screen-hud.exe --list   in danh sách thiết bị ra stdout rồi thoát
-//!   screen-hud.exe --log    ghi nhật ký sự kiện vào %TEMP%\screen-hud.log (chẩn đoán)
+//!   screen-hud.exe             chạy từ ngoài thư mục cài: cài/cập nhật rồi chạy bản đã cài
+//!                              (xem install.rs); chạy từ thư mục cài: chạy nền
+//!   screen-hud.exe --portable  chạy nền tại chỗ, không cài (dùng khi phát triển)
+//!   screen-hud.exe --uninstall gỡ (Settings > Apps gọi)
+//!   screen-hud.exe --all       hiện cả thiết bị chưa kết nối (chỉ để chẩn đoán)
+//!   screen-hud.exe --list      in danh sách thiết bị ra stdout rồi thoát
+//!   screen-hud.exe --log       ghi nhật ký sự kiện vào %TEMP%\screen-hud.log (chẩn đoán)
 
 #![windows_subsystem = "windows"]
 
 mod battery;
+mod install;
 mod overlay;
 mod tray;
 
@@ -41,6 +45,8 @@ const TIMER_POLL: usize = 2;
 const TIMER_FULLSCREEN: usize = 3;
 
 const MENU_SHOW: usize = 100;
+const MENU_AUTOSTART: usize = 101;
+const MENU_RELEASES: usize = 102;
 const MENU_EXIT: usize = 199;
 
 const LOW_BATTERY: u8 = 20;
@@ -56,6 +62,9 @@ struct State {
     drawn: Option<Vec<Line>>,
     taskbar_created: u32,
     queries: Vec<HDEVQUERY>,
+    icon: HICON,
+    /// (ký tự, màu tối) của icon khay hiện tại, để chỉ vẽ lại khi đổi.
+    icon_key: Option<(u16, bool)>,
 }
 
 thread_local! {
@@ -97,7 +106,28 @@ fn main() {
         let _ = writeln!(out, "(devnode query {} ms, container query {} ms)", t_dev.as_millis(), t_con.as_millis());
         return;
     }
-    if args.iter().any(|a| a == "--log") {
+    let has = |flag: &str| args.iter().any(|a| a == flag);
+    if has("--uninstall") {
+        install::uninstall();
+        message("Đã gỡ screen-hud.", MB_ICONINFORMATION);
+        install::remove_files();
+        return;
+    }
+    if !has("--portable") && !install::is_installed_copy() {
+        match install::install().and_then(|fresh| install::launch_installed().map(|_| fresh)) {
+            Ok(true) => message(
+                &format!(
+                    "Đã cài screen-hud v{}.\n\nỨng dụng chạy ở khay hệ thống và tự khởi động cùng Windows.\nCập nhật: tải bản mới rồi chạy.\nGỡ: Settings > Apps.",
+                    install::VERSION
+                ),
+                MB_ICONINFORMATION,
+            ),
+            Ok(false) => message(&format!("Đã cập nhật screen-hud lên v{}.", install::VERSION), MB_ICONINFORMATION),
+            Err(e) => message(&format!("Cài screen-hud thất bại:\n{e}"), MB_ICONERROR),
+        }
+        return;
+    }
+    if has("--log") {
         let path = std::env::temp_dir().join("screen-hud.log");
         if let Ok(f) = std::fs::File::create(&path) {
             let _ = START.set(std::time::Instant::now());
@@ -105,7 +135,12 @@ fn main() {
         }
     }
     log!("start args={:?}", args);
-    unsafe { run(args.iter().any(|a| a == "--all")) }
+    unsafe { run(has("--all")) }
+}
+
+fn message(text: &str, icon: MESSAGEBOX_STYLE) {
+    let (t, c) = (wide(text), wide("screen-hud"));
+    unsafe { MessageBoxW(null_mut(), t.as_ptr(), c.as_ptr(), MB_OK | MB_SETFOREGROUND | icon) };
 }
 
 unsafe fn run(show_all: bool) {
@@ -119,7 +154,7 @@ unsafe fn run(show_all: bool) {
     }
 
     let hinst = GetModuleHandleW(null());
-    let ctl_class = wide("ScreenHudCtl");
+    let ctl_class = wide(install::CTL_CLASS);
     let overlay_class = wide("ScreenHudOverlay");
     let title = wide("screen-hud");
     type Proc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
@@ -160,16 +195,18 @@ unsafe fn run(show_all: bool) {
             ctl,
             overlay,
             devices: Vec::new(),
-            show: true,
+            show: install::show_overlay(),
             show_all,
             fullscreen: false,
             drawn: None,
             taskbar_created,
             queries: Vec::new(),
+            icon: null_mut(),
+            icon_key: None,
         })
     });
 
-    tray::add(ctl, WM_APP_TRAY, "screen-hud");
+    tray::set(ctl, WM_APP_TRAY, "screen-hud", null_mut(), true);
     let queries = battery::watch(ctl, WM_APP_DEVICES);
     log!("device watch queries registered: {}", queries.len());
     with(|s| s.queries = queries);
@@ -187,6 +224,11 @@ unsafe fn run(show_all: bool) {
         battery::unwatch(&q);
     }
     tray::remove(ctl);
+    if let Some(icon) = with(|s| s.icon) {
+        if !icon.is_null() {
+            DestroyIcon(icon);
+        }
+    }
 }
 
 static CTL: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
@@ -231,7 +273,7 @@ fn lines_for(s: &State) -> Vec<Line> {
 
 /// Vẽ lại overlay nếu nội dung hoặc trạng thái hiện/ẩn đổi (hoặc `force`).
 unsafe fn update_view(force: bool) {
-    let Some((overlay, ctl, lines, visible, drawn, tip)) = with(|s| {
+    let Some((overlay, ctl, lines, visible, drawn, tip, glyph, icon_key, mut icon)) = with(|s| {
         let lines = lines_for(s);
         let visible = s.show && !s.fullscreen && !lines.is_empty();
         let tip = if s.devices.is_empty() {
@@ -243,14 +285,37 @@ unsafe fn update_view(force: bool) {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        (s.overlay, s.ctl, lines, visible, s.drawn.clone(), tip)
+        // Icon khay: pin thấp nhất trong các thiết bị đang kết nối, không có thì ký tự Bluetooth.
+        let glyph = s
+            .devices
+            .iter()
+            .filter(|d| d.connected)
+            .map(|d| d.level)
+            .min()
+            .map(overlay::battery_glyph)
+            .unwrap_or(tray::GLYPH_BLUETOOTH);
+        (s.overlay, s.ctl, lines, visible, s.drawn.clone(), tip, glyph, s.icon_key, s.icon)
     }) else {
         log!("update_view: state busy, skipped");
         return;
     };
     log!("update_view: force={} visible={} lines={} drawn={}", force, visible, lines.len(), drawn.is_some());
 
-    tray::set_tip(ctl, WM_APP_TRAY, &tip);
+    let key = (glyph, install::light_taskbar());
+    if icon_key != Some(key) {
+        let new_icon = tray::make_icon(key.0, key.1);
+        if !new_icon.is_null() {
+            if !icon.is_null() {
+                DestroyIcon(icon);
+            }
+            icon = new_icon;
+            with(|s| {
+                s.icon = new_icon;
+                s.icon_key = Some(key);
+            });
+        }
+    }
+    tray::set(ctl, WM_APP_TRAY, &tip, icon, false);
 
     if !visible {
         if drawn.is_some() {
@@ -283,18 +348,30 @@ unsafe fn check_fullscreen() {
 
 unsafe fn show_menu(hwnd: HWND) {
     let Some(show) = with(|s| s.show) else { return };
+    let autostart = install::autostart();
+    let title = format!("screen-hud v{}", install::VERSION);
     let chosen = tray::menu(
         hwnd,
         &[
+            tray::Item::Label(&title),
+            tray::Item::Separator,
             tray::Item::Check(MENU_SHOW, "Hiện overlay", show),
+            tray::Item::Check(MENU_AUTOSTART, "Khởi động cùng Windows", autostart),
+            tray::Item::Action(MENU_RELEASES, "Tải bản mới…"),
             tray::Item::Separator,
             tray::Item::Action(MENU_EXIT, "Thoát"),
         ],
     );
     match chosen {
         MENU_SHOW => {
-            with(|s| s.show = !s.show);
+            with(|s| s.show = !show);
+            install::set_show_overlay(!show);
             update_view(false);
+        }
+        MENU_AUTOSTART => install::set_autostart(!autostart),
+        MENU_RELEASES => {
+            let (verb, url) = (wide("open"), wide(install::RELEASES_URL));
+            ShellExecuteW(null_mut(), verb.as_ptr(), url.as_ptr(), null(), null(), SW_SHOWNORMAL);
         }
         MENU_EXIT => {
             DestroyWindow(hwnd);
@@ -330,7 +407,7 @@ unsafe extern "system" fn ctl_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             0
         }
         WM_APP_REDRAW | WM_DISPLAYCHANGE | WM_SETTINGCHANGE => {
-            // Đổi độ phân giải, DPI, vị trí/kích thước taskbar.
+            // Đổi độ phân giải, DPI, vị trí/kích thước taskbar, theme sáng/tối.
             update_view(true);
             if msg == WM_SETTINGCHANGE {
                 DefWindowProcW(hwnd, msg, wp, lp)
@@ -345,7 +422,8 @@ unsafe extern "system" fn ctl_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         _ => {
             if with(|s| s.taskbar_created) == Some(msg) && msg != 0 {
                 // Explorer khởi động lại: thêm lại icon khay.
-                tray::add(hwnd, WM_APP_TRAY, "screen-hud");
+                let icon = with(|s| s.icon).unwrap_or(null_mut());
+                tray::set(hwnd, WM_APP_TRAY, "screen-hud", icon, true);
                 update_view(false);
                 return 0;
             }

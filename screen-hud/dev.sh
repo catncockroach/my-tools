@@ -46,9 +46,7 @@ case "${1:-build}" in
     shift
     stop   # exe đang chạy thì không ghi đè được
     build
-    args=""
-    [ $# -gt 0 ] && args="-ArgumentList '$*'"
-    ps "Start-Process -FilePath '$EXE' $args"
+    ps "Start-Process -FilePath '$EXE' -ArgumentList '--portable $*'"
     echo "Đã chạy $EXE $*" ;;
   list) build; ps "& '$EXE' --list" ;;
   stop) stop ;;

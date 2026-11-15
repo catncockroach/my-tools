@@ -1,8 +1,9 @@
 name: screen-hud
 
 # Build screen-hud trên Windows (MSVC).
-# - push/PR đụng tới screen-hud/: build, upload exe làm artifact.
-# - push tag screen-hud-vX.Y.Z: build rồi tạo GitHub Release kèm exe.
+# - push/PR đụng tới screen-hud/: build để kiểm tra compile.
+# - push tag screen-hud-vX.Y.Z (khớp version trong Cargo.toml): build rồi tạo GitHub Release
+#   kèm exe. Exe tự cài đặt/cập nhật khi chạy, nên Release chỉ cần đúng một file đó.
 on:
   push:
     branches: [main]
@@ -51,17 +52,20 @@ jobs:
       - name: Kích thước exe
         run: ls -l target/release/screen-hud.exe
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: screen-hud-v${{ steps.version.outputs.version }}
-          path: screen-hud/target/release/screen-hud.exe
-
       - name: Tạo release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp target/release/screen-hud.exe "screen-hud-v${{ steps.version.outputs.version }}.exe"
+          cat > notes.md <<'NOTES'
+          **Cài đặt / cập nhật:** tải file `.exe` bên dưới rồi chạy. App tự cài vào `%LOCALAPPDATA%\Programs\screen-hud`, chạy ở khay hệ thống và khởi động cùng Windows. Cập nhật cũng vậy: tải bản mới, chạy.
+
+          **Gỡ:** Settings > Apps > screen-hud.
+
+          Exe chưa ký số nên lần đầu Windows SmartScreen có thể cảnh báo: bấm *More info* > *Run anyway*.
+          NOTES
+          sed -i 's/^          //' notes.md
           gh release create "$GITHUB_REF_NAME" "screen-hud-v${{ steps.version.outputs.version }}.exe" \
             --title "screen-hud v${{ steps.version.outputs.version }}" \
-            --generate-notes
+            --notes-file notes.md
