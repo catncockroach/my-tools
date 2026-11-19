@@ -26,6 +26,8 @@ const APP: &str = "screen-hud";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\screen-hud";
 const SETTINGS_KEY: &str = r"Software\screen-hud";
+const THEME_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+const EXPLORER_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
 
 pub fn install_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("Programs").join(APP)
@@ -163,13 +165,24 @@ pub fn set_show_overlay(on: bool) {
     set_dword(SETTINGS_KEY, "ShowOverlay", on as u32);
 }
 
-/// Overlay ở góc dưới trái (mặc định: dưới phải).
-pub fn overlay_left() -> bool {
-    get_dword(SETTINGS_KEY, "OverlayLeft") == Some(1)
+/// Vị trí overlay: 0 = góc dưới phải (mặc định), 1 = góc dưới trái, 2 = trên taskbar.
+pub fn position() -> u32 {
+    get_dword(SETTINGS_KEY, "Position").unwrap_or(0)
 }
 
-pub fn set_overlay_left(left: bool) {
-    set_dword(SETTINGS_KEY, "OverlayLeft", left as u32);
+pub fn set_position(pos: u32) {
+    set_dword(SETTINGS_KEY, "Position", pos);
+}
+
+/// Taskbar đang dùng theme sáng.
+pub fn light_taskbar() -> bool {
+    get_dword(THEME_KEY, "SystemUsesLightTheme") == Some(1)
+}
+
+/// Nút Widgets (thời tiết) nằm ngay bên trái khay hệ thống: Windows 11, icon taskbar căn trái
+/// (`TaskbarAl` = 0; căn giữa thì Widgets nằm ở mép trái) và Widgets không bị tắt (`TaskbarDa`).
+pub fn widgets_beside_tray() -> bool {
+    get_dword(EXPLORER_KEY, "TaskbarAl") == Some(0) && get_dword(EXPLORER_KEY, "TaskbarDa") != Some(0)
 }
 
 fn set_str(key: &str, name: &str, val: &str) {
