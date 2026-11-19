@@ -42,8 +42,8 @@ const OPACITY: u8 = 215;
 const BACKDROP: f32 = 0.28;
 const SHADOW: f32 = 0.5;
 
-/// Vẽ overlay; trả về (x, y, w, h) đã đặt, hoặc chuỗi mô tả bước thất bại.
-pub unsafe fn render(hwnd: HWND, lines: &[Line]) -> Result<(i32, i32, i32, i32), String> {
+/// Vẽ overlay ở góc dưới phải (hoặc trái nếu `left`) vùng làm việc; trả về (x, y, w, h) đã đặt, hoặc chuỗi mô tả bước thất bại.
+pub unsafe fn render(hwnd: HWND, lines: &[Line], left: bool) -> Result<(i32, i32, i32, i32), String> {
     let dpi = GetDpiForWindow(hwnd).max(96) as i32;
     let s = |v: i32| (v * dpi + 48) / 96;
 
@@ -146,11 +146,12 @@ pub unsafe fn render(hwnd: HWND, lines: &[Line]) -> Result<(i32, i32, i32, i32),
         }
     }
 
-    // Góc dưới phải vùng làm việc (phía trên taskbar).
+    // Góc dưới phải/trái vùng làm việc (phía trên taskbar).
     let mut work: RECT = std::mem::zeroed();
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut work as *mut RECT as *mut c_void, 0);
     let margin = s(6);
-    let pos = POINT { x: work.right - w - margin, y: work.bottom - h - margin };
+    let x = if left { work.left + margin } else { work.right - w - margin };
+    let pos = POINT { x, y: work.bottom - h - margin };
     let size = SIZE { cx: w, cy: h };
     let src = POINT { x: 0, y: 0 };
     let blend = BLENDFUNCTION {
@@ -204,7 +205,7 @@ unsafe fn make_font(px: i32, weight: i32, face: &str) -> HFONT {
 }
 
 /// Windows 11 có Segoe Fluent Icons; Windows 10 chỉ có Segoe MDL2 Assets (cùng mã ký tự pin).
-pub(crate) unsafe fn make_icon_font(dc: HDC, px: i32) -> HFONT {
+unsafe fn make_icon_font(dc: HDC, px: i32) -> HFONT {
     for face in ["Segoe Fluent Icons", "Segoe MDL2 Assets"] {
         let f = make_font(px, FW_NORMAL as i32, face);
         let old = SelectObject(dc, f);

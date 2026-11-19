@@ -1,6 +1,6 @@
 # screen-hud
 
-Overlay nhỏ, mờ ở góc dưới phải màn hình Windows (ngay trên taskbar), hiện những thông tin bình thường phải bấm vài lần mới xem được. Hiện tại: **% pin các thiết bị Bluetooth đang kết nối**.
+Overlay nhỏ, mờ ở góc dưới phải (hoặc trái) màn hình Windows (ngay trên taskbar), hiện những thông tin bình thường phải bấm vài lần mới xem được. Hiện tại: **% pin các thiết bị Bluetooth đang kết nối**.
 
 - Click xuyên qua, không lấy focus, không hiện trên taskbar/Alt-Tab.
 - Tự ẩn khi có app toàn màn hình (video, game, trình chiếu).
@@ -21,7 +21,7 @@ Lấy đúng giá trị mà Windows hiện trong **Settings > Bluetooth & device
 ## Dùng
 
 - Chỉ hiện thiết bị đang kết nối; không có thiết bị nào thì overlay ẩn hẳn.
-- Icon ở khay hệ thống (hiện mức pin thấp nhất, hoặc biểu tượng Bluetooth khi không có thiết bị). Bấm vào để mở menu: bật/tắt overlay, khởi động cùng Windows, tải bản mới, thoát.
+- Icon con vịt ở khay hệ thống; rê chuột vào để xem % pin từng thiết bị. Bấm vào để mở menu: bật/tắt overlay, chọn góc dưới trái/phải, khởi động cùng Windows, tải bản mới, thoát.
 - `screen-hud.exe --all`: hiện cả thiết bị chưa kết nối (chỉ để chẩn đoán).
 - `screen-hud.exe --list`: in danh sách thiết bị (tên, %, trạng thái) rồi thoát.
 - `screen-hud.exe --log`: ghi nhật ký sự kiện vào `%TEMP%\screen-hud.log` để chẩn đoán.

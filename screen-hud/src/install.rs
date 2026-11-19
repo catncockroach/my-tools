@@ -26,7 +26,6 @@ const APP: &str = "screen-hud";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\screen-hud";
 const SETTINGS_KEY: &str = r"Software\screen-hud";
-const THEME_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
 pub fn install_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("Programs").join(APP)
@@ -164,9 +163,13 @@ pub fn set_show_overlay(on: bool) {
     set_dword(SETTINGS_KEY, "ShowOverlay", on as u32);
 }
 
-/// Taskbar đang dùng theme sáng (icon khay cần màu tối).
-pub fn light_taskbar() -> bool {
-    get_dword(THEME_KEY, "SystemUsesLightTheme") == Some(1)
+/// Overlay ở góc dưới trái (mặc định: dưới phải).
+pub fn overlay_left() -> bool {
+    get_dword(SETTINGS_KEY, "OverlayLeft") == Some(1)
+}
+
+pub fn set_overlay_left(left: bool) {
+    set_dword(SETTINGS_KEY, "OverlayLeft", left as u32);
 }
 
 fn set_str(key: &str, name: &str, val: &str) {

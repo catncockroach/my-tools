@@ -1,4 +1,4 @@
-//! screen-hud: process nền hiển thị overlay mờ ở góc dưới phải màn hình.
+//! screen-hud: process nền hiển thị overlay mờ ở góc dưới (phải hoặc trái) màn hình.
 //!
 //! Thiết kế để tốn ít tài nguyên nhất có thể:
 //! - không có vòng lặp vẽ: chỉ vẽ lại khi dữ liệu đổi;
@@ -47,6 +47,8 @@ const TIMER_FULLSCREEN: usize = 3;
 const MENU_SHOW: usize = 100;
 const MENU_AUTOSTART: usize = 101;
 const MENU_RELEASES: usize = 102;
+const MENU_LEFT: usize = 103;
+const MENU_RIGHT: usize = 104;
 const MENU_EXIT: usize = 199;
 
 const LOW_BATTERY: u8 = 20;
@@ -56,6 +58,8 @@ struct State {
     overlay: HWND,
     devices: Vec<Device>,
     show: bool,
+    /// Overlay ở góc dưới trái thay vì dưới phải.
+    left: bool,
     show_all: bool,
     fullscreen: bool,
     /// Nội dung đang hiển thị; None = overlay đang ẩn.
@@ -63,8 +67,6 @@ struct State {
     taskbar_created: u32,
     queries: Vec<HDEVQUERY>,
     icon: HICON,
-    /// (ký tự, màu tối) của icon khay hiện tại, để chỉ vẽ lại khi đổi.
-    icon_key: Option<(u16, bool)>,
 }
 
 thread_local! {
@@ -190,23 +192,24 @@ unsafe fn run(show_all: bool) {
     log!("windows created ctl={:?} overlay={:?}", ctl, overlay);
 
     let taskbar_created = RegisterWindowMessageW(wide("TaskbarCreated").as_ptr());
+    let icon = tray::make_icon();
     STATE.with(|s| {
         *s.borrow_mut() = Some(State {
             ctl,
             overlay,
             devices: Vec::new(),
             show: install::show_overlay(),
+            left: install::overlay_left(),
             show_all,
             fullscreen: false,
             drawn: None,
             taskbar_created,
             queries: Vec::new(),
-            icon: null_mut(),
-            icon_key: None,
+            icon,
         })
     });
 
-    tray::set(ctl, WM_APP_TRAY, "screen-hud", null_mut(), true);
+    tray::set(ctl, WM_APP_TRAY, "screen-hud", icon, true);
     let queries = battery::watch(ctl, WM_APP_DEVICES);
     log!("device watch queries registered: {}", queries.len());
     with(|s| s.queries = queries);
@@ -273,7 +276,7 @@ fn lines_for(s: &State) -> Vec<Line> {
 
 /// Vẽ lại overlay nếu nội dung hoặc trạng thái hiện/ẩn đổi (hoặc `force`).
 unsafe fn update_view(force: bool) {
-    let Some((overlay, ctl, lines, visible, drawn, tip, glyph, icon_key, mut icon)) = with(|s| {
+    let Some((overlay, ctl, lines, visible, drawn, tip, icon, left)) = with(|s| {
         let lines = lines_for(s);
         let visible = s.show && !s.fullscreen && !lines.is_empty();
         let tip = if s.devices.is_empty() {
@@ -285,36 +288,13 @@ unsafe fn update_view(force: bool) {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        // Icon khay: pin thấp nhất trong các thiết bị đang kết nối, không có thì ký tự Bluetooth.
-        let glyph = s
-            .devices
-            .iter()
-            .filter(|d| d.connected)
-            .map(|d| d.level)
-            .min()
-            .map(overlay::battery_glyph)
-            .unwrap_or(tray::GLYPH_BLUETOOTH);
-        (s.overlay, s.ctl, lines, visible, s.drawn.clone(), tip, glyph, s.icon_key, s.icon)
+        (s.overlay, s.ctl, lines, visible, s.drawn.clone(), tip, s.icon, s.left)
     }) else {
         log!("update_view: state busy, skipped");
         return;
     };
     log!("update_view: force={} visible={} lines={} drawn={}", force, visible, lines.len(), drawn.is_some());
 
-    let key = (glyph, install::light_taskbar());
-    if icon_key != Some(key) {
-        let new_icon = tray::make_icon(key.0, key.1);
-        if !new_icon.is_null() {
-            if !icon.is_null() {
-                DestroyIcon(icon);
-            }
-            icon = new_icon;
-            with(|s| {
-                s.icon = new_icon;
-                s.icon_key = Some(key);
-            });
-        }
-    }
     tray::set(ctl, WM_APP_TRAY, &tip, icon, false);
 
     if !visible {
@@ -323,7 +303,7 @@ unsafe fn update_view(force: bool) {
             with(|s| s.drawn = None);
         }
     } else if force || drawn.as_ref() != Some(&lines) {
-        let r = overlay::render(overlay, &lines);
+        let r = overlay::render(overlay, &lines, left);
         log!("render: {:?}", r);
         ShowWindow(overlay, SW_SHOWNOACTIVATE);
         SetWindowPos(overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -347,7 +327,7 @@ unsafe fn check_fullscreen() {
 }
 
 unsafe fn show_menu(hwnd: HWND) {
-    let Some(show) = with(|s| s.show) else { return };
+    let Some((show, left)) = with(|s| (s.show, s.left)) else { return };
     let autostart = install::autostart();
     let title = format!("screen-hud v{}", install::VERSION);
     let chosen = tray::menu(
@@ -356,6 +336,8 @@ unsafe fn show_menu(hwnd: HWND) {
             tray::Item::Label(&title),
             tray::Item::Separator,
             tray::Item::Check(MENU_SHOW, "Hiện overlay", show),
+            tray::Item::Check(MENU_LEFT, "Góc dưới trái", left),
+            tray::Item::Check(MENU_RIGHT, "Góc dưới phải", !left),
             tray::Item::Check(MENU_AUTOSTART, "Khởi động cùng Windows", autostart),
             tray::Item::Action(MENU_RELEASES, "Tải bản mới…"),
             tray::Item::Separator,
@@ -367,6 +349,12 @@ unsafe fn show_menu(hwnd: HWND) {
             with(|s| s.show = !show);
             install::set_show_overlay(!show);
             update_view(false);
+        }
+        MENU_LEFT | MENU_RIGHT => {
+            let left = chosen == MENU_LEFT;
+            with(|s| s.left = left);
+            install::set_overlay_left(left);
+            update_view(true);
         }
         MENU_AUTOSTART => install::set_autostart(!autostart),
         MENU_RELEASES => {
@@ -407,7 +395,7 @@ unsafe extern "system" fn ctl_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             0
         }
         WM_APP_REDRAW | WM_DISPLAYCHANGE | WM_SETTINGCHANGE => {
-            // Đổi độ phân giải, DPI, vị trí/kích thước taskbar, theme sáng/tối.
+            // Đổi độ phân giải, DPI, vị trí/kích thước taskbar.
             update_view(true);
             if msg == WM_SETTINGCHANGE {
                 DefWindowProcW(hwnd, msg, wp, lp)

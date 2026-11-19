@@ -5,7 +5,7 @@ Các tool dùng cá nhân. Mỗi tool là một thư mục riêng.
 | Tool | Loại | Mô tả |
 |---|---|---|
 | [youtube-tools](youtube-tools/) | Chrome extension | Tiện ích khi xem YouTube: chặn quảng cáo video từ gốc, tự động skip quảng cáo, bấm phím bất kỳ để skip, tua nhanh quảng cáo x3, ẩn thẻ quảng cáo trong danh sách video. |
-| [screen-hud](screen-hud/) | App Windows (Rust) | Overlay nhỏ, mờ ở góc dưới phải màn hình, hiện % pin các thiết bị Bluetooth đang kết nối. Process nền tốn rất ít RAM. |
+| [screen-hud](screen-hud/) | App Windows (Rust) | Overlay nhỏ, mờ ở góc dưới phải (hoặc trái) màn hình, hiện % pin các thiết bị Bluetooth đang kết nối. Process nền tốn rất ít RAM. |
 
 ## Chrome extension
 
