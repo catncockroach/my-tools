@@ -335,13 +335,13 @@ unsafe fn show_menu(hwnd: HWND) {
         &[
             tray::Item::Label(&title),
             tray::Item::Separator,
-            tray::Item::Check(MENU_SHOW, "Hiện overlay", show),
-            tray::Item::Check(MENU_LEFT, "Góc dưới trái", left),
-            tray::Item::Check(MENU_RIGHT, "Góc dưới phải", !left),
-            tray::Item::Check(MENU_AUTOSTART, "Khởi động cùng Windows", autostart),
-            tray::Item::Action(MENU_RELEASES, "Tải bản mới…"),
+            tray::Item::Check(MENU_SHOW, "Show overlay", show),
+            tray::Item::Check(MENU_LEFT, "Bottom left", left),
+            tray::Item::Check(MENU_RIGHT, "Bottom right", !left),
+            tray::Item::Check(MENU_AUTOSTART, "Start with Windows", autostart),
+            tray::Item::Action(MENU_RELEASES, "Download updates…"),
             tray::Item::Separator,
-            tray::Item::Action(MENU_EXIT, "Thoát"),
+            tray::Item::Action(MENU_EXIT, "Exit"),
         ],
     );
     match chosen {

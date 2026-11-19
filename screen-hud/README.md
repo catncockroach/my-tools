@@ -21,7 +21,7 @@ Lấy đúng giá trị mà Windows hiện trong **Settings > Bluetooth & device
 ## Dùng
 
 - Chỉ hiện thiết bị đang kết nối; không có thiết bị nào thì overlay ẩn hẳn.
-- Icon con vịt ở khay hệ thống; rê chuột vào để xem % pin từng thiết bị. Bấm vào để mở menu: bật/tắt overlay, chọn góc dưới trái/phải, khởi động cùng Windows, tải bản mới, thoát.
+- Icon con vịt ở khay hệ thống; rê chuột vào để xem % pin từng thiết bị. Bấm vào để mở menu (tiếng Anh): *Show overlay*, *Bottom left* / *Bottom right*, *Start with Windows*, *Download updates…*, *Exit*.
 - `screen-hud.exe --all`: hiện cả thiết bị chưa kết nối (chỉ để chẩn đoán).
 - `screen-hud.exe --list`: in danh sách thiết bị (tên, %, trạng thái) rồi thoát.
 - `screen-hud.exe --log`: ghi nhật ký sự kiện vào `%TEMP%\screen-hud.log` để chẩn đoán.
