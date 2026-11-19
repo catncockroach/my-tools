@@ -1,6 +1,6 @@
 [package]
 name = "screen-hud"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "Overlay nhỏ, mờ ở góc màn hình Windows: % pin thiết bị Bluetooth đang kết nối"
 publish = false

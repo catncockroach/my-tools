@@ -49,7 +49,7 @@ pub fn install() -> Result<bool, String> {
     let dst = installed_exe();
     let fresh = !dst.exists();
     stop_running();
-    std::fs::create_dir_all(install_dir()).map_err(|e| format!("Không tạo được {}: {e}", install_dir().display()))?;
+    std::fs::create_dir_all(install_dir()).map_err(|e| format!("Could not create {}: {e}", install_dir().display()))?;
     // Bản cũ vừa thoát có thể còn giữ file thêm một chút.
     let src = current_exe();
     let mut attempt = 0;
@@ -60,7 +60,7 @@ pub fn install() -> Result<bool, String> {
                 attempt += 1;
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
-            Err(e) => return Err(format!("Không chép được vào {}: {e}", dst.display())),
+            Err(e) => return Err(format!("Could not copy to {}: {e}", dst.display())),
         }
     }
     if fresh || autostart() {
@@ -86,7 +86,7 @@ pub fn launch_installed() -> Result<(), String> {
     std::process::Command::new(installed_exe())
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("Không chạy được {}: {e}", installed_exe().display()))
+        .map_err(|e| format!("Could not start {}: {e}", installed_exe().display()))
 }
 
 /// Gỡ phần registry và tắt bản đang chạy. Gọi [`remove_files`] ngay trước khi process thoát.

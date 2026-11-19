@@ -111,7 +111,7 @@ fn main() {
     let has = |flag: &str| args.iter().any(|a| a == flag);
     if has("--uninstall") {
         install::uninstall();
-        message("Đã gỡ screen-hud.", MB_ICONINFORMATION);
+        message("screen-hud has been uninstalled.", MB_ICONINFORMATION);
         install::remove_files();
         return;
     }
@@ -119,13 +119,13 @@ fn main() {
         match install::install().and_then(|fresh| install::launch_installed().map(|_| fresh)) {
             Ok(true) => message(
                 &format!(
-                    "Đã cài screen-hud v{}.\n\nỨng dụng chạy ở khay hệ thống và tự khởi động cùng Windows.\nCập nhật: tải bản mới rồi chạy.\nGỡ: Settings > Apps.",
+                    "screen-hud v{} is installed.\n\nIt runs in the system tray and starts with Windows.\nUpdate: download the new version and run it.\nUninstall: Settings > Apps.",
                     install::VERSION
                 ),
                 MB_ICONINFORMATION,
             ),
-            Ok(false) => message(&format!("Đã cập nhật screen-hud lên v{}.", install::VERSION), MB_ICONINFORMATION),
-            Err(e) => message(&format!("Cài screen-hud thất bại:\n{e}"), MB_ICONERROR),
+            Ok(false) => message(&format!("screen-hud has been updated to v{}.", install::VERSION), MB_ICONINFORMATION),
+            Err(e) => message(&format!("screen-hud installation failed:\n{e}"), MB_ICONERROR),
         }
         return;
     }
@@ -280,11 +280,11 @@ unsafe fn update_view(force: bool) {
         let lines = lines_for(s);
         let visible = s.show && !s.fullscreen && !lines.is_empty();
         let tip = if s.devices.is_empty() {
-            "screen-hud: không có thiết bị".to_string()
+            "screen-hud: no devices".to_string()
         } else {
             s.devices
                 .iter()
-                .map(|d| format!("{} {}%{}", d.name, d.level, if d.connected { "" } else { " (ngắt)" }))
+                .map(|d| format!("{} {}%{}", d.name, d.level, if d.connected { "" } else { " (disconnected)" }))
                 .collect::<Vec<_>>()
                 .join("\n")
         };
