@@ -1,4 +1,5 @@
-//! screen-hud: process nền hiển thị overlay mờ ở góc dưới (phải hoặc trái) màn hình.
+//! screen-hud: process nền hiển thị overlay mờ ở góc dưới (phải hoặc trái) màn hình, hoặc
+//! trong vùng trống trên taskbar.
 //!
 //! Thiết kế để tốn ít tài nguyên nhất có thể:
 //! - không có vòng lặp vẽ: chỉ vẽ lại khi dữ liệu đổi;
@@ -29,12 +30,13 @@ use windows_sys::Win32::Devices::DeviceQuery::HDEVQUERY;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::{CreateMutexW, GetCurrentProcess, SetProcessWorkingSetSize};
+use windows_sys::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows_sys::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 use windows_sys::Win32::UI::Shell::*;
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 use battery::Device;
-use overlay::Line;
+use overlay::{Line, Place, Slot};
 
 const WM_APP_DEVICES: u32 = WM_APP + 1;
 const WM_APP_TRAY: u32 = WM_APP + 2;
@@ -47,23 +49,29 @@ const TIMER_FULLSCREEN: usize = 3;
 const MENU_SHOW: usize = 100;
 const MENU_AUTOSTART: usize = 101;
 const MENU_RELEASES: usize = 102;
-const MENU_LEFT: usize = 103;
-const MENU_RIGHT: usize = 104;
+/// Mục chọn vị trí: MENU_POS + giá trị `install::position()`.
+const MENU_POS: usize = 110;
 const MENU_EXIT: usize = 199;
 
 const LOW_BATTERY: u8 = 20;
+
+const POS_RIGHT: u32 = 0;
+const POS_LEFT: u32 = 1;
+const POS_TASKBAR: u32 = 2;
 
 struct State {
     ctl: HWND,
     overlay: HWND,
     devices: Vec<Device>,
     show: bool,
-    /// Overlay ở góc dưới trái thay vì dưới phải.
-    left: bool,
+    /// Vị trí overlay, xem `install::position()`.
+    pos: u32,
+    /// Vùng trống trên taskbar đo lần gần nhất (chỉ khi `pos` = POS_TASKBAR).
+    slot: Option<Slot>,
     show_all: bool,
     fullscreen: bool,
-    /// Nội dung đang hiển thị; None = overlay đang ẩn.
-    drawn: Option<Vec<Line>>,
+    /// Nội dung và vị trí đang hiển thị; None = overlay đang ẩn.
+    drawn: Option<(Vec<Line>, Place)>,
     taskbar_created: u32,
     queries: Vec<HDEVQUERY>,
     icon: HICON,
@@ -199,7 +207,8 @@ unsafe fn run(show_all: bool) {
             overlay,
             devices: Vec::new(),
             show: install::show_overlay(),
-            left: install::overlay_left(),
+            pos: install::position(),
+            slot: None,
             show_all,
             fullscreen: false,
             drawn: None,
@@ -216,6 +225,17 @@ unsafe fn run(show_all: bool) {
     refresh();
     SetTimer(ctl, TIMER_POLL, 60_000, None);
     SetTimer(ctl, TIMER_FULLSCREEN, 2_000, None);
+    // Taskbar tự đưa lên trên cùng khi được kích hoạt, che overlay nằm trên nó: mỗi lần đổi
+    // cửa sổ foreground thì đưa overlay lên lại (chỉ khi đang ở chế độ taskbar).
+    let hook = SetWinEventHook(
+        EVENT_SYSTEM_FOREGROUND,
+        EVENT_SYSTEM_FOREGROUND,
+        null_mut(),
+        Some(on_foreground),
+        0,
+        0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+    );
 
     let mut msg: MSG = std::mem::zeroed();
     while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
@@ -223,6 +243,9 @@ unsafe fn run(show_all: bool) {
         DispatchMessageW(&msg);
     }
 
+    if !hook.is_null() {
+        UnhookWinEvent(hook);
+    }
     if let Some(q) = with(|s| std::mem::take(&mut s.queries)) {
         battery::unwatch(&q);
     }
@@ -255,7 +278,8 @@ unsafe fn refresh() {
     update_view(false);
 }
 
-fn lines_for(s: &State) -> Vec<Line> {
+/// `dark_text`: overlay nằm trên taskbar theme sáng.
+fn lines_for(s: &State, dark_text: bool) -> Vec<Line> {
     s.devices
         .iter()
         .filter(|d| d.connected || s.show_all)
@@ -263,12 +287,13 @@ fn lines_for(s: &State) -> Vec<Line> {
             name: d.name.clone(),
             pct: format!("{}%", d.level),
             glyph: overlay::battery_glyph(d.level),
-            color: if !d.connected {
-                [200, 200, 200]
-            } else if d.level <= LOW_BATTERY {
-                [255, 150, 130]
-            } else {
-                [255, 255, 255]
+            color: match (dark_text, !d.connected, d.level <= LOW_BATTERY) {
+                (false, true, _) => [200, 200, 200],
+                (false, _, true) => [255, 150, 130],
+                (false, _, _) => [255, 255, 255],
+                (true, true, _) => [100, 100, 100],
+                (true, _, true) => [196, 43, 28],
+                (true, _, _) => [20, 20, 20],
             },
         })
         .collect()
@@ -276,9 +301,20 @@ fn lines_for(s: &State) -> Vec<Line> {
 
 /// Vẽ lại overlay nếu nội dung hoặc trạng thái hiện/ẩn đổi (hoặc `force`).
 unsafe fn update_view(force: bool) {
-    let Some((overlay, ctl, lines, visible, drawn, tip, icon, left)) = with(|s| {
-        let lines = lines_for(s);
-        let visible = s.show && !s.fullscreen && !lines.is_empty();
+    let Some(pos) = with(|s| s.pos) else {
+        log!("update_view: state busy, skipped");
+        return;
+    };
+    let slot = if pos == POS_TASKBAR { overlay::taskbar_slot() } else { None };
+    let Some((overlay, ctl, lines, place, drawn, tip, icon)) = with(|s| {
+        s.slot = slot;
+        let place = match pos {
+            POS_TASKBAR => slot.map(Place::Taskbar),
+            POS_LEFT => Some(Place::Corner { left: true }),
+            _ => Some(Place::Corner { left: false }),
+        };
+        let lines = lines_for(s, matches!(place, Some(Place::Taskbar(t)) if t.light));
+        let place = place.filter(|_| s.show && !s.fullscreen && !lines.is_empty());
         let tip = if s.devices.is_empty() {
             "screen-hud: no devices".to_string()
         } else {
@@ -288,46 +324,66 @@ unsafe fn update_view(force: bool) {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        (s.overlay, s.ctl, lines, visible, s.drawn.clone(), tip, s.icon, s.left)
+        (s.overlay, s.ctl, lines, place, s.drawn.clone(), tip, s.icon)
     }) else {
         log!("update_view: state busy, skipped");
         return;
     };
-    log!("update_view: force={} visible={} lines={} drawn={}", force, visible, lines.len(), drawn.is_some());
+    log!("update_view: force={} place={:?} lines={} drawn={}", force, place, lines.len(), drawn.is_some());
 
     tray::set(ctl, WM_APP_TRAY, &tip, icon, false);
 
-    if !visible {
-        if drawn.is_some() {
-            ShowWindow(overlay, SW_HIDE);
-            with(|s| s.drawn = None);
+    match place {
+        None => {
+            if drawn.is_some() {
+                ShowWindow(overlay, SW_HIDE);
+                with(|s| s.drawn = None);
+            }
         }
-    } else if force || drawn.as_ref() != Some(&lines) {
-        let r = overlay::render(overlay, &lines, left);
-        log!("render: {:?}", r);
-        ShowWindow(overlay, SW_SHOWNOACTIVATE);
-        SetWindowPos(overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        with(|s| s.drawn = Some(lines));
+        Some(place) => {
+            let now = (lines, place);
+            if force || drawn.as_ref() != Some(&now) {
+                let r = overlay::render(overlay, &now.0, place);
+                log!("render: {:?}", r);
+                ShowWindow(overlay, SW_SHOWNOACTIVATE);
+                SetWindowPos(overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                with(|s| s.drawn = Some(now));
+            }
+        }
     }
 
     // Trả lại các trang bộ nhớ không dùng; process nền phần lớn thời gian chỉ ngủ trong GetMessage.
     SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
 }
 
-unsafe fn check_fullscreen() {
+/// Mỗi 2 s: app toàn màn hình bật/tắt, và (chế độ taskbar) taskbar đổi vị trí/kích thước,
+/// khay hệ thống rộng ra/hẹp lại, taskbar tự ẩn, Explorer khởi động lại.
+unsafe fn check_screen() {
     let mut st: QUERY_USER_NOTIFICATION_STATE = 0;
-    if SHQueryUserNotificationState(&mut st) < 0 {
-        return;
+    if SHQueryUserNotificationState(&mut st) >= 0 {
+        let fs = st == QUNS_BUSY || st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_PRESENTATION_MODE;
+        if with(|s| std::mem::replace(&mut s.fullscreen, fs) != fs) == Some(true) {
+            log!("fullscreen state={} -> hidden={}", st, fs);
+            update_view(false);
+            return;
+        }
     }
-    let fs = st == QUNS_BUSY || st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_PRESENTATION_MODE;
-    if with(|s| std::mem::replace(&mut s.fullscreen, fs) != fs) == Some(true) {
-        log!("fullscreen state={} -> hidden={}", st, fs);
+    let Some((POS_TASKBAR, old)) = with(|s| (s.pos, s.slot)) else { return };
+    let slot = overlay::taskbar_slot();
+    if slot != old {
+        log!("taskbar slot {:?} -> {:?}", old, slot);
         update_view(false);
     }
 }
 
+unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
+    if let Some((overlay, true)) = with(|s| (s.overlay, matches!(s.drawn, Some((_, Place::Taskbar(_)))))) {
+        SetWindowPos(overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
 unsafe fn show_menu(hwnd: HWND) {
-    let Some((show, left)) = with(|s| (s.show, s.left)) else { return };
+    let Some((show, pos)) = with(|s| (s.show, s.pos)) else { return };
     let autostart = install::autostart();
     let title = format!("screen-hud v{}", install::VERSION);
     let chosen = tray::menu(
@@ -336,8 +392,11 @@ unsafe fn show_menu(hwnd: HWND) {
             tray::Item::Label(&title),
             tray::Item::Separator,
             tray::Item::Check(MENU_SHOW, "Show overlay", show),
-            tray::Item::Check(MENU_LEFT, "Bottom left", left),
-            tray::Item::Check(MENU_RIGHT, "Bottom right", !left),
+            tray::Item::Separator,
+            tray::Item::Check(MENU_POS + POS_RIGHT as usize, "Bottom right", pos == POS_RIGHT),
+            tray::Item::Check(MENU_POS + POS_LEFT as usize, "Bottom left", pos == POS_LEFT),
+            tray::Item::Check(MENU_POS + POS_TASKBAR as usize, "In taskbar", pos == POS_TASKBAR),
+            tray::Item::Separator,
             tray::Item::Check(MENU_AUTOSTART, "Start with Windows", autostart),
             tray::Item::Action(MENU_RELEASES, "Download updates…"),
             tray::Item::Separator,
@@ -350,11 +409,11 @@ unsafe fn show_menu(hwnd: HWND) {
             install::set_show_overlay(!show);
             update_view(false);
         }
-        MENU_LEFT | MENU_RIGHT => {
-            let left = chosen == MENU_LEFT;
-            with(|s| s.left = left);
-            install::set_overlay_left(left);
-            update_view(true);
+        c if (MENU_POS..=MENU_POS + POS_TASKBAR as usize).contains(&c) => {
+            let pos = (c - MENU_POS) as u32;
+            with(|s| s.pos = pos);
+            install::set_position(pos);
+            update_view(false);
         }
         MENU_AUTOSTART => install::set_autostart(!autostart),
         MENU_RELEASES => {
@@ -382,7 +441,7 @@ unsafe extern "system" fn ctl_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     refresh();
                 }
                 TIMER_POLL => refresh(),
-                TIMER_FULLSCREEN => check_fullscreen(),
+                TIMER_FULLSCREEN => check_screen(),
                 _ => {}
             }
             0
